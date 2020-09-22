@@ -6,7 +6,7 @@ Goal of this Machine Learning Project is simply:
 * Train a model to predict the price of a car.
 
 ## Results
-* a number of models predicted the price of car pretty well on unseen data compared to the average. Random Forest Regressor as well as neural network yeilded imperfect results. given the size of the data, as well as unforseen troubles, RMSE of base is 27,000 where as most models yielded around 46,000.
+* a number of models predicted the price of car pretty well on unseen data compared to the average. Gradient Boosting yielded the best results. given the size of the data, as well as unforseen troubles, RMSE of base is 27,000 nueral network is a work in progress. 
 
 ## Data
 Cars was scraped using 20 scrapper programs running in parrlel and stored locally on a M.2 Form Factor. 

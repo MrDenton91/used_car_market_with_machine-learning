@@ -6,7 +6,7 @@ Goal of this Machine Learning Project is simply:
 * Train a model to predict the price of a car.
 
 ## Results
-* a number of models predicted the price of car pretty well on unseen data compared to the average. Gradient Boosting yielded the best results with an RMSE of 8,396. RMSE of the model base is 19,298 nueral network is a work in progress. 
+* a number of models predicted the price of car pretty well on unseen data compared to the average. Gradient Boosting yielded the best results with an RMSE of 8,396. RMSE of the model base is 19,298.
 
 ## Data
 Cars was scraped using 20 scrapper programs running in parrlel and stored locally on a M.2 Form Factor. 
@@ -35,7 +35,7 @@ In 2019 the used car market saw 40 million transactions, according to search res
 
 
 ## Model
-The general Idea is to build a model that returns a price for car given inputed feature information. Data was tested on a few different type of machine learning models. Random Forest Regressor as well as Gradient Boosting preformed around the same RMSE when compared to the baseline RMSE (average).
+The general Idea is to build a model that returns a price for car given inputed feature information. Data was tested on a few different type of machine learning models. Gradient Boosting preformed the best when compared to the baseline RMSE (average). Neural network is still a work in progress. 
 
 ### Output
 The output for the machine learning model is simple, prices can range from $1,000.00 - $100,000,000.00

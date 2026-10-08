@@ -1,0 +1,9 @@
+# Scraped and intermediate data (regenerate with Code/scraper.py)
+*.csv
+
+# Python / Jupyter
+__pycache__/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/

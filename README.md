@@ -73,7 +73,7 @@ python scraper.py --zip-codes zip_code_database.csv --zip-start 10000 --zip-end 
 python -m pytest tests
 ```
 
-`--check` prints how many listings were parsed and how often each field was found. If cars.com changes its page layout again, save a results page from your browser and run `python scraper.py --parse-file page.html` to see what still parses. If listings are rendered only by JavaScript, or the site starts serving bot checks, each worker stops and logs it instead of retrying.
+`--check` prints how many listings were parsed and how often each field was found. If cars.com changes its page layout again, save a results page from your browser and run `python scraper.py --parse-file page.html` to see what still parses. If the site starts serving bot checks, each worker logs it and stops instead of retrying. If `--check` reports 0 listings on a page that shows cars in your browser, the listings are probably rendered by JavaScript, and the scraper would need a headless browser such as Playwright.
 
 Scraped CSVs are git-ignored. Please respect cars.com's terms of service and keep the request delay reasonable.
 

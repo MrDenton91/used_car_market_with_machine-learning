@@ -47,7 +47,7 @@ The model outputs a price in U.S. dollars. Listings under $500 or over $500,000 
 ## Repository layout
 | Path | Purpose |
 | --- | --- |
-| `Code/scraper.py` | Scrapes cars.com search results across a range of zip codes, in parallel worker processes |
+| `Code/scraper.py` | Scrapes cars.com search results (`/shopping/results/`) across a range of zip codes, in parallel worker processes |
 | `Code/car_utils.py` | Shared helpers: `load_raw`, `clean` (dedup, outlier filter, age) and `evaluate` (RMSE, MAE, R², baseline) |
 | `Code/combining_data.ipynb` | Combines the scraped CSVs into one dataset |
 | `Code/EDA_ploting.ipynb`, `Code/cars_manipulation.ipynb` | Exploratory analysis and plots |
@@ -62,6 +62,7 @@ pip install -r requirements.txt
 
 # 1. Scrape (needs a zip code list CSV with a `zip` column, e.g. a US zip code database export)
 cd Code
+python scraper.py --check 10001 --save-html page.html   # confirm parsing works on the live site first
 python scraper.py --zip-codes zip_code_database.csv --zip-start 10000 --zip-end 100000 --workers 20 --out-dir .
 
 # 2. Clean and evaluate, e.g. in a notebook:
@@ -71,6 +72,8 @@ python scraper.py --zip-codes zip_code_database.csv --zip-start 10000 --zip-end 
 # 3. Sanity tests (from the repo root)
 python -m pytest tests
 ```
+
+`--check` prints how many listings were parsed and how often each field was found. If cars.com changes its page layout again, save a results page from your browser and run `python scraper.py --parse-file page.html` to see what still parses. If listings are rendered only by JavaScript, or the site starts serving bot checks, each worker stops and logs it instead of retrying.
 
 Scraped CSVs are git-ignored. Please respect cars.com's terms of service and keep the request delay reasonable.
 

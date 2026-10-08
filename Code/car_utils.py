@@ -14,7 +14,9 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Column order of the original headerless carlist*.csv files.
 LEGACY_COLUMNS = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
-CORE_COLUMNS = LEGACY_COLUMNS
+# Rows missing any of these are dropped; other text columns missing a value become 'Unknown'.
+REQUIRED_COLUMNS = ['Price', 'Make', 'Model', 'Year', 'Milage']
+CATEGORICAL_COLUMNS = ['Body Style', 'City', 'State', 'Color']
 
 
 def _read_carlist(path):
@@ -40,8 +42,10 @@ def load_raw(pattern='carlist*.csv'):
 def clean(df, min_price=500, max_price=500_000, max_mileage=1_000_000, reference_year=None):
     """Drop duplicates, missing values and implausible rows, and add an ``Age`` column.
 
-    Duplicates are removed by VIN when the data has one (the same car is often
-    listed many times), otherwise by identical rows. Prices outside
+    Rows missing price, make, model, year or mileage are dropped; missing body
+    style, city, state or color become 'Unknown'. Duplicates are removed by VIN
+    when the data has one (the same car is often listed many times), otherwise
+    by identical rows. Prices outside
     [min_price, max_price] and mileages above max_mileage are treated as
     data-entry errors. ``reference_year`` defaults to the current year; pass
     2020 to reproduce the original analysis.
@@ -49,7 +53,11 @@ def clean(df, min_price=500, max_price=500_000, max_mileage=1_000_000, reference
     df = df.copy()
     for col in ['Price', 'Year', 'Milage']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-    df = df.dropna(subset=CORE_COLUMNS)
+    df = df.dropna(subset=REQUIRED_COLUMNS)
+    for col in CATEGORICAL_COLUMNS:
+        if col not in df.columns:
+            df[col] = None
+        df[col] = df[col].fillna('Unknown')
 
     if 'VIN' in df.columns and df['VIN'].notna().any():
         has_vin = df['VIN'].notna()

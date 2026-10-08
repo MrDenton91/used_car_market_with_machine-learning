@@ -332,8 +332,11 @@ def main():
             report(parse_listings(f.read()), args.parse_file)
         return
     if args.check:
-        with requests.Session() as session:
-            html = fetch_page(session, args.check, 1, radius=args.radius)
+        try:
+            with requests.Session() as session:
+                html = fetch_page(session, args.check, 1, radius=args.radius)
+        except (BlockedError, requests.RequestException) as e:
+            raise SystemExit('Could not fetch results for zip {}: {}'.format(args.check, e))
         if args.save_html:
             with open(args.save_html, 'w', encoding='utf-8') as f:
                 f.write(html)

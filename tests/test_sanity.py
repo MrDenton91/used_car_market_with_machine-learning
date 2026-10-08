@@ -300,3 +300,14 @@ def test_python_sources_compile():
     for path in glob.glob(os.path.join(REPO, 'Code', '*.py')):
         with open(path) as f:
             compile(f.read(), path, 'exec')
+
+
+def test_check_cli_reports_fetch_failure_cleanly(monkeypatch):
+    def failing_fetch(session, zip_code, page_num, radius='all'):
+        raise scraper.requests.ConnectionError('proxy refused')
+
+    monkeypatch.setattr(scraper, 'fetch_page', failing_fetch)
+    monkeypatch.setattr(sys, 'argv', ['scraper.py', '--check', '94404'])
+    with pytest.raises(SystemExit) as exc:
+        scraper.main()
+    assert 'zip 94404' in str(exc.value) and 'proxy refused' in str(exc.value)

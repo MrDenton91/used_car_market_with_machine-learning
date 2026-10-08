@@ -5,6 +5,7 @@ import copy
 import pandas as pd
 import re
 import csv
+from datetime import date
 import numpy as np
 import os
 
@@ -82,8 +83,10 @@ def populate_car_list(zip,page_num):
     # csv.writer quotes values that contain commas (e.g. "Washington, D.C.")
     with open('./carlist3.csv','a', newline='') as f:
         writer = csv.writer(f)
+        # last column: the date this row was scraped / added to the data set
+        scraped = date.today().isoformat()
         for item in organize_list_cars(zip,page_num):
-            writer.writerow(item)
+            writer.writerow(item + [scraped])
 
 # I already created a list of all zip code within the United states
 # I just need to import it

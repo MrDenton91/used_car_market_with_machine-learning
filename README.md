@@ -68,4 +68,6 @@ held-out test set, and saves the best model to `models/price_model.joblib` with 
 predicts straight from raw values; only load model files you trust, since joblib/pickle files can run code
 when loaded.
 
+Each row the scrapers write ends with a `Date Scraped` column (YYYY-MM-DD, the day the listing was collected). CSVs scraped before this column existed still load; `train.py` keeps the earliest date when the same listing was scraped on several days, and measures car age from that date (or `--scrape-year` for undated rows).
+
 The scraped CSVs and `zip_code_database.csv` (used by the scrapers) are not included in this repository.

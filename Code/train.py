@@ -23,8 +23,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 
-# column order written by the split*.py scrapers
-COLUMNS = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
+# column order written by the split*.py scrapers; older scrapes have no 'Date Scraped' column
+FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
+COLUMNS = FEATURES + ['Date Scraped']
 CATEGORICAL = ['Make', 'Model', 'Body Style', 'City', 'State', 'Color']
 NUMERIC = ['Age', 'Milage']
 
@@ -45,14 +46,21 @@ def clean(data, scrape_year):
     data = data.copy()
     for col in ['Price', 'Year', 'Milage']:
         data[col] = pd.to_numeric(data[col], errors='coerce')
+    data['Date Scraped'] = pd.to_datetime(data['Date Scraped'], errors='coerce')
+    data = data.dropna(subset=FEATURES)
     for col in CATEGORICAL:
         data[col] = data[col].astype(str).str.strip()
-    data = data.dropna().drop_duplicates()
 
+    # a listing scraped on several days is one car; keep the day it was first added
+    data = data.sort_values('Date Scraped').drop_duplicates(subset=FEATURES, keep='first')
+
+    # age is relative to when the listing was scraped; rows from older scrapes
+    # without a date fall back to --scrape-year
+    year_scraped = data['Date Scraped'].dt.year.fillna(scrape_year)
     data = data[data['Price'].between(MIN_PRICE, MAX_PRICE)
                 & data['Milage'].between(0, MAX_MILEAGE)
-                & data['Year'].between(1900, scrape_year + 1)]
-    data['Age'] = scrape_year - data['Year']
+                & data['Year'].between(1900, year_scraped + 1)]
+    data['Age'] = year_scraped[data.index] - data['Year']
     return data.drop(columns='Year').reset_index(drop=True)
 
 
@@ -93,7 +101,7 @@ def evaluate(model, X, y):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('data', nargs='+', help='scraped CSV file(s)')
-    parser.add_argument('--scrape-year', type=int, default=2020, help='year the data was scraped, used for car age')
+    parser.add_argument('--scrape-year', type=int, default=2020, help='year the data was scraped, used for car age when a row has no Date Scraped')
     parser.add_argument('--sample', type=int, help='train on a random sample of this many rows')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)

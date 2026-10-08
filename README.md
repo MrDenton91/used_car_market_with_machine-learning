@@ -70,4 +70,7 @@ when loaded.
 
 Each row the scrapers write ends with a `Date Scraped` column (YYYY-MM-DD, the day the listing was collected). CSVs scraped before this column existed still load; `train.py` keeps the earliest date when the same listing was scraped on several days, and measures car age from that date (or `--scrape-year` for undated rows).
 
+To check whether cars.com still has the page format the scrapers expect, without starting a crawl, fetch a single page:
+`python Code/fetch_one_page.py --zip 10001 --page 1`. It saves the page as HTML and reports how many rows the scraper parses from it (`--from-file` re-checks a saved page without a new request).
+
 The scraped CSVs and `zip_code_database.csv` (used by the scrapers) are not included in this repository.

@@ -4,6 +4,7 @@ import time
 import copy
 import pandas as pd
 import re
+import csv
 import numpy as np
 import os
 
@@ -38,79 +39,52 @@ def cars_call(zip,page_num):
 #this moster of method goes through a each page scrapping what I want
 def organize_list_cars(zip, page_num):
     delimeters = '"type"'
+    # fetch the page once and parse both the listings and the colors out of it
     strings = cars_call(zip, page_num)
     lstin = re.split(delimeters, strings)
-    color = []
-    
-    color.append(((re.findall('/","color":"(.*?)"},{"@context":"http://schema.org"',cars_call(zip, page_num) ))))
-    color1 = color[0]
-    
+
+    color1 = re.findall('/","color":"(.*?)"},{"@context":"http://schema.org"', strings)
+
     #shorttening list of stuff :0
     new_list = []
     for i in lstin:
         if i.startswith('' ':"inventory"') == True:
             new_list.append(i)
-    ##i'm just creating features lists for each charateristic i'm intrested in.
-    price = []
-    make =[]
-    model = []
-    year = []
-    bodyStyle = []
-    sellerRating = []
-    city = []
-    state = []
-    mileage = []
-    rating = []
-    
-    #populate feature lists values
-    for i in new_list:
-        make.append(re.findall('"make":"(.+)","makeId"', i))
-        model.append((re.findall('"model":"(.+)","modelId"', i)))
-        year.append((re.findall('"year":(.+),"trim"', i)))
-        bodyStyle.append((re.findall('"bodyStyle":"(.+)","customerId"', i)))
-        sellerRating.append((re.findall(',"rating":(.+),"reviewCount"', i)))
-        city.append((re.findall('"city":"(.+),"state":', i)))
-        price.append((re.findall(',"price":(.+),"mileage":', i)))
-        mileage.append((re.findall(',"mileage":(.+),"vin":', i)))
-        state.append((re.findall(',"state":"(.+)","truncatedDescription', i)))
-        color.append(((re.findall('","color":"(.+)"},{"@context":"', i))))
-        rating.append(re.findall('"rating":(.+),"review',i))
-        
-        
-    #creaing an uncleaning master list of cars
-    masterlist = []
-    for i in range(len(make)):
-        #appending everything to master list before cleaning, I broke it up into two so it's a bit easier to read.
-        try:
-            masterlist.append(str(price[i]) + str(make[i]) + str(model[i]) + str(year[i]) + str(bodyStyle[i]) +str(city[i])+ str(state[i])+ str(mileage[i]) +',' +str(color1[i])  )
-        except:
-            continue
-        #masterlist.append(str(seller_label[i]) + str(rating[i]) + str(review_count[i]) + str(distance_from_zip[i]))
-    #cleaning the master list 
-    
+
+    # one regex per feature, in the column order of the csv:
+    # Price, Make, Model, Year, Body Style, City, State, Milage (Color comes from color1)
+    patterns = [',"price":(.+),"mileage":',
+                '"make":"(.+)","makeId"',
+                '"model":"(.+)","modelId"',
+                '"year":(.+),"trim"',
+                '"bodyStyle":"(.+)","customerId"',
+                '"city":"(.+),"state":',
+                ',"state":"(.+)","truncatedDescription',
+                ',"mileage":(.+),"vin":']
+
+    #populate one row of feature values per car
     container = []
-    for i in range(len(masterlist)):
-        cars = masterlist[i]
-        cars = cars.replace('[]', ',')
-        cars = cars.replace('[', '')
-        cars = cars.replace(']', '')
-        cars = cars.replace("''",',')
-        cars = cars.replace("'", '')
-        cars = cars.replace('"','')
-        if cars.count(',') == 8 and cars not in container:
-            container.append(cars)
-        else:
-            pass
+    for i, car in enumerate(new_list):
+        row = []
+        for pattern in patterns:
+            found = re.findall(pattern, car)
+            row.append(found[0].replace('"', '').strip() if found else '')
+        row.append(color1[i] if i < len(color1) else '')
+
+        # skip cars missing a feature and duplicate listings
+        if all(row) and row not in container:
+            container.append(row)
     return container
 
 
 #I need a way to write all this information to a csv file for manipulation and EDA
 def populate_car_list(zip,page_num):
-    with open('./carlist9.csv','a') as f:
+    # csv.writer quotes values that contain commas (e.g. "Washington, D.C.")
+    with open('./carlist9.csv','a', newline='') as f:
+        writer = csv.writer(f)
         for item in organize_list_cars(zip,page_num):
-            f.write("%s\n" % item)
-        
-    pass
+            writer.writerow(item)
+
 # I already created a list of all zip code within the United states
 # I just need to import it
 zip_codes_data = pd.read_csv('zip_code_database.csv')

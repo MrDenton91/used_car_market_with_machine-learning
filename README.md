@@ -70,6 +70,16 @@ when loaded.
 
 Each row the scrapers write ends with a `Date Scraped` column (YYYY-MM-DD, the day the listing was collected). CSVs scraped before this column existed still load; `train.py` keeps the earliest date when the same listing was scraped on several days, and measures car age from that date (or `--scrape-year` for undated rows).
 
+### Collecting new data
+cars.com now blocks automated requests, so new data comes from sources that allow collection:
+
+| Script | Source | What it collects |
+|---|---|---|
+| `Code/collect_gsa.py` | [GSA Auctions](https://gsaauctions.gov) public API (US government surplus) | Cars and trucks at auction, with VIN, odometer and location. Run it daily: once an auction closes, its last bid is kept as the sale price. |
+| `Code/collect_classiccars.py` | ClassicCars.com (collector cars) | Asking price, year, make, model and location from search pages; `--details` adds odometer, colors, transmission, engine, trim, VIN and title status. It obeys robots.txt, identifies itself, and waits 2 seconds between requests. Resumable. |
+
+Both write to `data/` with a header row and a `Source` column, fill in body style, drive type, fuel and engine from VINs using NHTSA's free vPIC decoder, and can be passed straight to `train.py`, which uses `Source` as a feature (collector-car prices behave very differently from everyday used cars). Collected data stays local (`data/` is git-ignored); don't republish it.
+
 To check whether cars.com still has the page format the scrapers expect, without starting a crawl, fetch a single page:
 `python Code/fetch_one_page.py --zip 10001 --page 1`. It saves the page as HTML and reports how many rows the scraper parses from it (`--from-file` re-checks a saved page without a new request).
 

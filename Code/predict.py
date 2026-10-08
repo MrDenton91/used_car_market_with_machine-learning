@@ -23,10 +23,11 @@ def main():
     parser.add_argument('--city', required=True)
     parser.add_argument('--state', required=True)
     parser.add_argument('--color', required=True)
+    parser.add_argument('--source', default='cars.com', help='market to price in: cars.com, classiccars or gsa')
     args = parser.parse_args()
 
     car = pd.DataFrame([{
-        'Make': args.make, 'Model': args.model, 'Body Style': args.body_style,
+        'Source': args.source, 'Make': args.make, 'Model': args.model, 'Body Style': args.body_style,
         'City': args.city, 'State': args.state, 'Color': args.color,
         'Age': args.scrape_year - args.year, 'Milage': args.mileage,
     }])

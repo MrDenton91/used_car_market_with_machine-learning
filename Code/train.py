@@ -26,7 +26,9 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 # column order written by the split*.py scrapers; older scrapes have no 'Date Scraped' column
 FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
 COLUMNS = FEATURES + ['Date Scraped']
-CATEGORICAL = ['Make', 'Model', 'Body Style', 'City', 'State', 'Color']
+# the collect_*.py collectors write CSVs with a header and these extra columns
+EXTRA = ['Source', 'Status']
+CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color']
 NUMERIC = ['Age', 'Milage']
 
 # listings outside these ranges are data-entry errors (e.g. $100,000,000 cars)
@@ -35,10 +37,19 @@ MAX_MILEAGE = 500_000
 
 
 def load_data(paths):
-    # the scraper CSVs have no header, the combined ones do; read both the same
-    # way and drop any header rows that end up as data
-    frames = [pd.read_csv(p, names=COLUMNS, header=None, low_memory=False) for p in paths]
-    data = pd.concat(frames, ignore_index=True)
+    frames = []
+    for p in paths:
+        with open(p) as f:
+            header = f.readline()
+        if header.startswith('Price,') and 'Source' in header:
+            # collect_*.py output: read columns by name
+            frames.append(pd.read_csv(p, low_memory=False).reindex(columns=COLUMNS + EXTRA))
+        else:
+            # the split*.py scraper CSVs have no header, the combined ones do; read
+            # both the same way and drop any header rows that end up as data
+            frames.append(pd.read_csv(p, names=COLUMNS, header=None, low_memory=False))
+    data = pd.concat(frames, ignore_index=True).reindex(columns=COLUMNS + EXTRA)
+    data['Source'] = data['Source'].fillna('cars.com')
     return data[data['Price'] != 'Price']
 
 
@@ -47,6 +58,10 @@ def clean(data, scrape_year):
     for col in ['Price', 'Year', 'Milage']:
         data[col] = pd.to_numeric(data[col], errors='coerce')
     data['Date Scraped'] = pd.to_datetime(data['Date Scraped'], errors='coerce')
+    # a GSA auction's bid is only a sale price once the auction has closed
+    data = data[(data['Source'] != 'gsa') | (data['Status'] == 'Closed')]
+    # collectors leave these blank when a listing doesn't say
+    data[['Body Style', 'City', 'Color']] = data[['Body Style', 'City', 'Color']].fillna('Unknown')
     data = data.dropna(subset=FEATURES)
     for col in CATEGORICAL:
         data[col] = data[col].astype(str).str.strip()
@@ -61,7 +76,7 @@ def clean(data, scrape_year):
                 & data['Milage'].between(0, MAX_MILEAGE)
                 & data['Year'].between(1900, year_scraped + 1)]
     data['Age'] = year_scraped[data.index] - data['Year']
-    return data.drop(columns='Year').reset_index(drop=True)
+    return data.drop(columns=['Year', 'Status']).reset_index(drop=True)
 
 
 def build_models(random_state):

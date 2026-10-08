@@ -1,0 +1,8 @@
+# scraped / derived data
+*.csv
+
+# trained models written by Code/train.py
+models/
+
+.ipynb_checkpoints/
+__pycache__/

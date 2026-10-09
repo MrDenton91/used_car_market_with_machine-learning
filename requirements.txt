@@ -1,0 +1,14 @@
+numpy
+pandas
+scikit-learn>=1.4
+joblib
+scipy
+statsmodels
+matplotlib
+# scraper (Code/split*.py)
+requests
+beautifulsoup4
+lxml
+# neural net notebook only
+keras
+tensorflow

@@ -23,6 +23,8 @@ import time
 from datetime import date
 from urllib.robotparser import RobotFileParser
 
+import requests
+
 from collect_common import USER_AGENT, enrich_with_vins, read_rows, session, write_rows
 
 SITE = 'https://classiccars.com'
@@ -64,7 +66,18 @@ class Crawler:
         if not self.robots.can_fetch(USER_AGENT, url):
             raise Blocked('robots.txt disallows ' + url)
         time.sleep(self.delay)
-        r = self.http.get(url, timeout=60)
+        # retry dropped connections (e.g. a long-lived connection being reset)
+        # with growing waits; give up on the run if the network stays down
+        for wait in (30, 120, 300, None):
+            try:
+                r = self.http.get(url, timeout=60)
+                break
+            except (requests.ConnectionError, requests.Timeout) as e:
+                if wait is None:
+                    raise Blocked('network error for {}: {}'.format(url, e))
+                print('connection error, retrying in {}s: {}'.format(wait, type(e).__name__), flush=True)
+                self.http.close()
+                time.sleep(wait)
         if r.status_code in (403, 429, 503):
             raise Blocked('HTTP {} for {}'.format(r.status_code, url))
         r.raise_for_status()

@@ -17,6 +17,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer, TransformedTargetRegressor
 from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
@@ -62,7 +63,9 @@ def clean(data, scrape_year):
     data = data[(data['Source'] != 'gsa') | (data['Status'] == 'Closed')]
     # collectors leave these blank when a listing doesn't say
     data[['Body Style', 'City', 'Color']] = data[['Body Style', 'City', 'Color']].fillna('Unknown')
-    data = data.dropna(subset=FEATURES)
+    # mileage may be missing (e.g. collector-car listings without a details pass);
+    # the models handle that, so only the other features are required
+    data = data.dropna(subset=[c for c in FEATURES if c != 'Milage'])
     for col in CATEGORICAL:
         data[col] = data[col].astype(str).str.strip()
 
@@ -73,7 +76,7 @@ def clean(data, scrape_year):
     # without a date fall back to --scrape-year
     year_scraped = data['Date Scraped'].dt.year.fillna(scrape_year)
     data = data[data['Price'].between(MIN_PRICE, MAX_PRICE)
-                & data['Milage'].between(0, MAX_MILEAGE)
+                & (data['Milage'].isna() | data['Milage'].between(0, MAX_MILEAGE))
                 & data['Year'].between(1900, year_scraped + 1)]
     data['Age'] = year_scraped[data.index] - data['Year']
     return data.drop(columns=['Year', 'Status']).reset_index(drop=True)
@@ -82,7 +85,7 @@ def clean(data, scrape_year):
 def build_models(random_state):
     one_hot = ColumnTransformer([
         ('cat', OneHotEncoder(handle_unknown='infrequent_if_exist', min_frequency=20), CATEGORICAL),
-        ('num', StandardScaler(), NUMERIC),
+        ('num', make_pipeline(SimpleImputer(strategy='median', add_indicator=True), StandardScaler()), NUMERIC),
     ])
     # City and Model have thousands of values, so the boosted model target-encodes
     # them; TargetEncoder cross-fits internally so the encoding doesn't leak the target

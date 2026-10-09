@@ -49,10 +49,22 @@ def decode_vins(vins, http=None, delay=1.0):
     decoded = {}
     for i in range(0, len(vins), 50):
         batch = vins[i:i + 50]
-        r = http.post('https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVINValuesBatch/',
-                      data={'format': 'json', 'data': ';'.join(batch)}, timeout=60)
-        r.raise_for_status()
-        for res in r.json()['Results']:
+        # vPIC has occasional outages (503s); retry once, then leave the batch
+        # for the next run, which picks up VINs that still have no specs
+        for attempt in range(2):
+            try:
+                r = http.post('https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVINValuesBatch/',
+                              data={'format': 'json', 'data': ';'.join(batch)}, timeout=60)
+                r.raise_for_status()
+                results = r.json()['Results']
+                break
+            except (requests.RequestException, ValueError) as e:
+                if attempt == 0:
+                    time.sleep(30)
+                else:
+                    print('VIN decoder unavailable, skipping {} VINs for now: {}'.format(len(batch), e))
+                    results = []
+        for res in results:
             if not res.get('Make'):
                 continue
             cylinders = res.get('EngineCylinders')

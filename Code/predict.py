@@ -27,6 +27,7 @@ def main():
     parser.add_argument('--color', required=True)
     parser.add_argument('--source', default='cars.com', help='market to price in: cars.com, craigslist, classiccars, gsa, absee:carmax, ...')
     parser.add_argument('--sale-year', type=int, help='year of the sale being priced (default: the --scrape-year)')
+    parser.add_argument('--sale-month', type=int, default=6, help='month of the sale being priced (1-12)')
     for name in ['trim', 'transmission', 'engine', 'drive-type', 'fuel-type', 'title-status']:
         parser.add_argument('--' + name, default='Unknown')
     args = parser.parse_args()
@@ -38,7 +39,8 @@ def main():
         'Body Style': args.body_style, 'City': args.city, 'State': args.state, 'Color': args.color,
         'Trim': args.trim, 'Transmission': args.transmission, 'Engine': args.engine,
         'Drive Type': args.drive_type, 'Fuel Type': args.fuel_type, 'Title Status': args.title_status,
-        'Age': sale_year - args.year, 'Sale Year': sale_year, 'Milage': args.mileage,
+        'Age': sale_year - args.year, 'Sale Year': sale_year, 'Sale Time': sale_year + (args.sale_month - 1) / 12,
+        'Milage': args.mileage,
     }])
     price = joblib.load(args.model_file).predict(car)[0]
     print('${:,.0f}'.format(price))

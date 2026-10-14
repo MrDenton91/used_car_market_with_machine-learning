@@ -34,7 +34,7 @@ COLUMNS = FEATURES + ['Date Scraped']
 DETAILS = ['Trim', 'Transmission', 'Engine', 'Drive Type', 'Fuel Type', 'Title Status']
 EXTRA = ['Source', 'Status', 'Listing ID'] + DETAILS
 CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color'] + DETAILS
-NUMERIC = ['Age', 'Sale Year', 'Milage']
+NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage']
 
 # listings outside these ranges are data-entry errors (e.g. $100,000,000 cars)
 MIN_PRICE, MAX_PRICE = 500, 500_000
@@ -98,6 +98,8 @@ def clean(data, scrape_year, include_new=False):
     # without a date fall back to --scrape-year. The sale year is its own feature
     # because the market moved a lot between 2010 and 2026.
     data['Sale Year'] = data['Date Scraped'].dt.year.fillna(scrape_year)
+    # the month as well (2021-22 moved a lot within the year); mid-year when unknown
+    data['Sale Time'] = data['Sale Year'] + (data['Date Scraped'].dt.month.fillna(6) - 1) / 12
     data = data[data['Price'].between(MIN_PRICE, MAX_PRICE)
                 & (data['Milage'].isna() | data['Milage'].between(0, MAX_MILEAGE))
                 & data['Year'].between(1900, data['Sale Year'] + 1)]

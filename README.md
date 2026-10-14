@@ -6,7 +6,16 @@ Goal of this Machine Learning Project is simply:
 * Train a model to predict the price of a car.
 
 ## Results
-* a number of models predicted the price of car pretty well on unseen data compared to a baseline that predicts the median price for every car. Gradient Boosting yielded the best results with an RMSE of 8,396. RMSE of the model base is 19,298.
+Original project (2020, ~100k cars.com listings, 9 features): gradient boosting RMSE **$8,396** against a median-price baseline of $19,298.
+
+Current `Code/train.py` on 6.05 million used vehicles (Craigslist 2021, ClassicCars.com, GSA auctions and a 40% sample of the SEC loan filings), 20% held out:
+
+| Model | RMSE | MAE | R² |
+|---|---|---|---|
+| Median-price baseline | $11,753 | $8,089 | – |
+| Gradient boosting | **$4,482** | **$2,665** | **0.85** |
+
+On everyday cars (leaving out the ClassicCars and Porsche slices, 0.3% of the test set) the RMSE is about $4,100. The largest single improvements were adding the sale year as a feature, the trim/transmission/engine/drivetrain/fuel/title columns, and more rows; see the per-source table that `train.py` prints.
 
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 

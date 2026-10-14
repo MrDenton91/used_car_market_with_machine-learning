@@ -32,9 +32,9 @@ FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Mi
 COLUMNS = FEATURES + ['Date Scraped']
 # the collect_*.py / import_*.py CSVs have a header and these extra columns
 DETAILS = ['Trim', 'Transmission', 'Engine', 'Drive Type', 'Fuel Type', 'Title Status']
-EXTRA = ['Source', 'Status', 'Listing ID'] + DETAILS
+EXTRA = ['Source', 'Status', 'Listing ID', 'VIN'] + DETAILS
 CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color'] + DETAILS
-NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage']
+NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage', 'Displacement', 'Horsepower', 'Doors']
 
 # listings outside these ranges are data-entry errors (e.g. $100,000,000 cars)
 MIN_PRICE, MAX_PRICE = 500, 500_000
@@ -68,8 +68,30 @@ def load_data(paths, sample_frac=1.0, sample_sources='absee', random_state=10, i
     return pd.concat(frames, ignore_index=True)
 
 
-def clean(data, scrape_year, include_new=False):
+def add_vin_specs(data, specs_path):
+    """Fill in trim and engine details from VINs decoded by decode_vins.py."""
+    specs = pd.read_csv(specs_path, dtype=str).drop_duplicates('VIN').set_index('VIN')
+    vin = data['VIN'].astype(str).str.strip().str.upper()
+    matched = specs.reindex(vin)
+    matched.index = data.index
+    print('VIN specs matched for {:,} rows'.format(matched['Make'].notna().sum()), flush=True)
+    # fill the listing's own details where it gave none
+    for column, field in [('Trim', 'Trim'), ('Body Style', 'BodyClass'), ('Drive Type', 'DriveType'),
+                          ('Fuel Type', 'FuelTypePrimary'), ('Transmission', 'TransmissionStyle')]:
+        blank = data[column].isna() | data[column].isin(['', 'Unknown'])
+        data.loc[blank, column] = matched.loc[blank, field]
+    data['Displacement'] = pd.to_numeric(matched['DisplacementL'], errors='coerce')
+    data['Horsepower'] = pd.to_numeric(matched['EngineHP'], errors='coerce')
+    data['Doors'] = pd.to_numeric(matched['Doors'], errors='coerce')
+    return data
+
+
+def clean(data, scrape_year, include_new=False, vin_specs=None):
     data = data.copy()
+    for col in ['Displacement', 'Horsepower', 'Doors']:
+        data[col] = np.nan
+    if vin_specs and os.path.exists(vin_specs):
+        data = add_vin_specs(data, vin_specs)
     for col in ['Price', 'Year', 'Milage']:
         data[col] = pd.to_numeric(data[col], errors='coerce')
     data['Date Scraped'] = pd.to_datetime(data['Date Scraped'], errors='coerce')
@@ -104,7 +126,7 @@ def clean(data, scrape_year, include_new=False):
                 & (data['Milage'].isna() | data['Milage'].between(0, MAX_MILEAGE))
                 & data['Year'].between(1900, data['Sale Year'] + 1)]
     data['Age'] = data['Sale Year'] - data['Year']
-    return data.drop(columns=['Year', 'Status', 'Listing ID']).reset_index(drop=True)
+    return data.drop(columns=['Year', 'Status', 'Listing ID', 'VIN']).reset_index(drop=True)
 
 
 def build_models(random_state, model='lightgbm', target='raw', with_ridge=False):
@@ -154,6 +176,7 @@ def main():
     parser.add_argument('--sample-frac', type=float, default=1.0, help='keep this fraction of rows from --sample-sources while reading')
     parser.add_argument('--sample-sources', default='absee', help='regex of sources to subsample (default: the SEC loan files)')
     parser.add_argument('--include-new', action='store_true', help='also train on new-car records (SEC loan filings)')
+    parser.add_argument('--vin-specs', default='data/vin_specs.csv', help='output of decode_vins.py (skipped if missing)')
     parser.add_argument('--model', choices=['lightgbm', 'hist'], default='lightgbm', help="lightgbm (default) or sklearn's HistGradientBoosting")
     parser.add_argument('--target', choices=['raw', 'log'], default='raw', help='fit dollars (lowest RMSE) or log-dollars (lowest MAE)')
     parser.add_argument('--with-ridge', action='store_true', help='also fit a ridge regression (slow on large data)')
@@ -163,7 +186,7 @@ def main():
     args = parser.parse_args()
 
     data = clean(load_data(args.data, args.sample_frac, args.sample_sources, args.random_state, args.include_new),
-                 args.scrape_year, args.include_new)
+                 args.scrape_year, args.include_new, args.vin_specs)
     if args.sample and args.sample < len(data):
         data = data.sample(args.sample, random_state=args.random_state)
     print('{:,} clean listings'.format(len(data)), flush=True)

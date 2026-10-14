@@ -30,6 +30,8 @@ def main():
     parser.add_argument('--sale-month', type=int, default=6, help='month of the sale being priced (1-12)')
     for name in ['trim', 'transmission', 'engine', 'drive-type', 'fuel-type', 'title-status']:
         parser.add_argument('--' + name, default='Unknown')
+    for name in ['displacement', 'horsepower', 'doors']:
+        parser.add_argument('--' + name, type=float, default=float('nan'), help='engine litres / hp / door count, if known')
     args = parser.parse_args()
 
     sale_year = args.sale_year or args.scrape_year
@@ -40,7 +42,7 @@ def main():
         'Trim': args.trim, 'Transmission': args.transmission, 'Engine': args.engine,
         'Drive Type': args.drive_type, 'Fuel Type': args.fuel_type, 'Title Status': args.title_status,
         'Age': sale_year - args.year, 'Sale Year': sale_year, 'Sale Time': sale_year + (args.sale_month - 1) / 12,
-        'Milage': args.mileage,
+        'Milage': args.mileage, 'Displacement': args.displacement, 'Horsepower': args.horsepower, 'Doors': args.doors,
     }])
     price = joblib.load(args.model_file).predict(car)[0]
     print('${:,.0f}'.format(price))

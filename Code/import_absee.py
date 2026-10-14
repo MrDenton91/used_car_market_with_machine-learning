@@ -45,11 +45,27 @@ MAKES = {'Chev': 'Chevrolet', 'Chevrole': 'Chevrolet', 'Chevrol': 'Chevrolet', '
 STOP_WORDS = {'auto', 'automobile', 'financial', 'credit', 'lending', 'select', 'prime', 'llc'}
 
 
+AUTO_TRUST = re.compile(r'(?i)auto|vehicle|car[_m]|leas|motor|drive')
+
+
+def list_auto_trusts(http):
+    # the uploader has over a thousand ABS-EE datasets (also mortgages etc.);
+    # page through all of them and keep the auto loan and lease trusts
+    datasets, url, params = [], 'https://huggingface.co/api/datasets', {'author': 'DenyTranDFW', 'limit': 1000}
+    while url:
+        r = http.get(url, params=params, timeout=120)
+        r.raise_for_status()
+        datasets += r.json()
+        nxt = re.search(r'<([^>]+)>;\s*rel="next"', r.headers.get('Link', ''))
+        url, params = (nxt.group(1) if nxt else None), None
+    return [d for d in datasets if AUTO_TRUST.search(d['id'].split('/')[1])]
+
+
 def download(raw_dir, filings_per_trust=3):
     http = requests.Session()
     http.headers['User-Agent'] = USER_AGENT
-    datasets = http.get('https://huggingface.co/api/datasets',
-                        params={'author': 'DenyTranDFW', 'search': 'Auto', 'limit': 100}, timeout=60).json()
+    datasets = list_auto_trusts(http)
+    print('{} auto trusts'.format(len(datasets)), flush=True)
     for ds in datasets:
         name = ds['id'].split('/')[1]
         tree = http.get('https://huggingface.co/api/datasets/{}/tree/main?recursive=true'.format(ds['id']), timeout=60).json()
@@ -144,12 +160,13 @@ def convert(data, dataset_name):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--download', action='store_true', help='fetch the filings first')
+    parser.add_argument('--filings', type=int, default=3, help='filings to fetch per trust (the first holds the initial pool)')
     parser.add_argument('--raw', default=RAW)
     parser.add_argument('--out', default='data/absee_vehicles.csv')
     args = parser.parse_args()
 
     if args.download:
-        download(args.raw)
+        download(args.raw, args.filings)
 
     frames = []
     for name in sorted(os.listdir(args.raw)):

@@ -28,7 +28,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
 COLUMNS = FEATURES + ['Date Scraped']
 # the collect_*.py collectors write CSVs with a header and these extra columns
-EXTRA = ['Source', 'Status']
+EXTRA = ['Source', 'Status', 'Listing ID']
 CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color']
 NUMERIC = ['Age', 'Milage']
 
@@ -54,13 +54,15 @@ def load_data(paths):
     return data[data['Price'] != 'Price']
 
 
-def clean(data, scrape_year):
+def clean(data, scrape_year, include_new=False):
     data = data.copy()
     for col in ['Price', 'Year', 'Milage']:
         data[col] = pd.to_numeric(data[col], errors='coerce')
     data['Date Scraped'] = pd.to_datetime(data['Date Scraped'], errors='coerce')
     # a GSA auction's bid is only a sale price once the auction has closed
     data = data[(data['Source'] != 'gsa') | (data['Status'] == 'Closed')]
+    if not include_new:   # loan filings also cover new cars
+        data = data[data['Status'] != 'New']
     # collectors leave these blank when a listing doesn't say
     data[['Body Style', 'City', 'Color']] = data[['Body Style', 'City', 'Color']].fillna('Unknown')
     # mileage may be missing (e.g. collector-car listings without a details pass);
@@ -70,7 +72,8 @@ def clean(data, scrape_year):
         data[col] = data[col].astype(str).str.strip()
 
     # a listing scraped on several days is one car; keep the day it was first added
-    data = data.sort_values('Date Scraped').drop_duplicates(subset=FEATURES, keep='first')
+    # (rows with a Listing ID are distinct records even when their features match)
+    data = data.sort_values('Date Scraped').drop_duplicates(subset=FEATURES + ['Listing ID'], keep='first')
 
     # age is relative to when the listing was scraped; rows from older scrapes
     # without a date fall back to --scrape-year
@@ -79,7 +82,7 @@ def clean(data, scrape_year):
                 & (data['Milage'].isna() | data['Milage'].between(0, MAX_MILEAGE))
                 & data['Year'].between(1900, year_scraped + 1)]
     data['Age'] = year_scraped[data.index] - data['Year']
-    return data.drop(columns=['Year', 'Status']).reset_index(drop=True)
+    return data.drop(columns=['Year', 'Status', 'Listing ID']).reset_index(drop=True)
 
 
 def build_models(random_state):
@@ -121,12 +124,13 @@ def main():
     parser.add_argument('data', nargs='+', help='scraped CSV file(s)')
     parser.add_argument('--scrape-year', type=int, default=2020, help='year the data was scraped, used for car age when a row has no Date Scraped')
     parser.add_argument('--sample', type=int, help='train on a random sample of this many rows')
+    parser.add_argument('--include-new', action='store_true', help='also train on new-car records (SEC loan filings)')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)
     parser.add_argument('--out', default='models/price_model.joblib')
     args = parser.parse_args()
 
-    data = clean(load_data(args.data), args.scrape_year)
+    data = clean(load_data(args.data), args.scrape_year, args.include_new)
     if args.sample and args.sample < len(data):
         data = data.sample(args.sample, random_state=args.random_state)
     print('{:,} clean listings'.format(len(data)))

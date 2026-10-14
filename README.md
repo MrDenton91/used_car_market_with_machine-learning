@@ -78,7 +78,10 @@ cars.com now blocks automated requests, so new data comes from sources that allo
 | `Code/collect_gsa.py` | [GSA Auctions](https://gsaauctions.gov) public API (US government surplus) | Cars and trucks at auction, with VIN, odometer and location. Run it daily: once an auction closes, its last bid is kept as the sale price. |
 | `Code/collect_classiccars.py` | ClassicCars.com (collector cars) | Asking price, year, make, model and location from search pages; `--details` adds odometer, colors, transmission, engine, trim, VIN and title status. It obeys robots.txt, identifies itself, and waits 2 seconds between requests. Resumable. |
 
+| `Code/import_absee.py` | SEC Form ABS-EE auto-loan filings (public records; parquet copies on Hugging Face by DenyTranDFW, spot-checked against EDGAR) | ~6.8 million financed vehicles from CarMax, Toyota, Honda, GM Financial, Ally, Santander, Ford Credit and others, 2010–2026: make, model, year, new/used, type, state, and the vehicle's value at the time of the loan (for CarMax, its retail sale price). No mileage, city or color. `--download` fetches the first three filings of each trust (~1.5 GB). |
 | `Code/import_craigslist.py` | [Used Cars Dataset](https://zenodo.org/records/10457828) (CC-BY-4.0; CC0 on OpenML) | 426,880 US Craigslist listings posted April–May 2021, converted to the same format. Download the zip from Zenodo first. |
+
+`train.py` skips new-car records by default (`--include-new` adds them) and uses `Source` as a feature, so each lender's values are modelled separately from listing prices.
 
 The collectors write to `data/` with a header row and a `Source` column, fill in body style, drive type, fuel and engine from VINs using NHTSA's free vPIC decoder, and can be passed straight to `train.py`, which uses `Source` as a feature (collector-car prices behave very differently from everyday used cars). Collected data stays local (`data/` is git-ignored); don't republish it.
 

@@ -42,7 +42,8 @@ MAKES = {'Chev': 'Chevrolet', 'Chevrole': 'Chevrolet', 'Chevrol': 'Chevrolet', '
          'Volv': 'Volvo', 'Strn': 'Saturn', 'Suzi': 'Suzuki', 'Smrt': 'Smart', 'Lndr': 'Land Rover',
          'Land Rov': 'Land Rover', 'Humm': 'Hummer', 'Jagu': 'Jaguar', 'Gmc Light Duty': 'Gmc',
          'Ford Truck': 'Ford', 'Ford Commercial': 'Ford', 'Bmw': 'BMW', 'Gmc': 'GMC'}
-STOP_WORDS = {'auto', 'automobile', 'financial', 'credit', 'lending', 'select', 'prime', 'llc'}
+STOP_WORDS = {'auto', 'automobile', 'financial', 'credit', 'lending', 'select', 'prime', 'llc',
+              'motorcycle', 'vehicle', 'trust', 'leasing', 'lease'}
 NEEDED = ['assetNumber', 'reportingPeriodEndingDate', 'reportingPeriodEndDate', 'originationDate',
           'vehicleManufacturerName', 'vehicleModelName', 'vehicleModelYear', 'vehicleNewUsedCode',
           'vehicleTypeCode', 'vehicleValueAmount', 'vehicleValueSourceCode', 'obligorGeographicLocation',

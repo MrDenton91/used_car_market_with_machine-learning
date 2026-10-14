@@ -23,13 +23,20 @@ def main():
     parser.add_argument('--city', required=True)
     parser.add_argument('--state', required=True)
     parser.add_argument('--color', required=True)
-    parser.add_argument('--source', default='cars.com', help='market to price in: cars.com, classiccars or gsa')
+    parser.add_argument('--source', default='cars.com', help='market to price in: cars.com, craigslist, classiccars, gsa, absee:carmax, ...')
+    parser.add_argument('--sale-year', type=int, help='year of the sale being priced (default: the --scrape-year)')
+    for name in ['trim', 'transmission', 'engine', 'drive-type', 'fuel-type', 'title-status']:
+        parser.add_argument('--' + name, default='Unknown')
     args = parser.parse_args()
 
+    sale_year = args.sale_year or args.scrape_year
     car = pd.DataFrame([{
-        'Source': args.source, 'Make': args.make, 'Model': args.model, 'Body Style': args.body_style,
-        'City': args.city, 'State': args.state, 'Color': args.color,
-        'Age': args.scrape_year - args.year, 'Milage': args.mileage,
+        'Source': args.source, 'Make': args.make.title(),
+        'Model': ''.join(ch for ch in args.model.upper() if ch.isalnum()) or 'UNKNOWN',
+        'Body Style': args.body_style, 'City': args.city, 'State': args.state, 'Color': args.color,
+        'Trim': args.trim, 'Transmission': args.transmission, 'Engine': args.engine,
+        'Drive Type': args.drive_type, 'Fuel Type': args.fuel_type, 'Title Status': args.title_status,
+        'Age': sale_year - args.year, 'Sale Year': sale_year, 'Milage': args.mileage,
     }])
     price = joblib.load(args.model_file).predict(car)[0]
     print('${:,.0f}'.format(price))

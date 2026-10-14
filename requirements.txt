@@ -2,6 +2,7 @@ numpy
 pandas
 scikit-learn>=1.4
 joblib
+lightgbm
 scipy
 statsmodels
 matplotlib

@@ -25,6 +25,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, TargetEncoder
 
+from pricing_model import CategoricalLGBM
+
 # column order written by the split*.py scrapers; older scrapes have no 'Date Scraped' column
 FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Milage', 'Color']
 COLUMNS = FEATURES + ['Date Scraped']
@@ -103,24 +105,27 @@ def clean(data, scrape_year, include_new=False):
     return data.drop(columns=['Year', 'Status', 'Listing ID']).reset_index(drop=True)
 
 
-def build_models(random_state, with_ridge=False):
-    # City and Model have thousands of values, so the boosted model target-encodes
-    # them; TargetEncoder cross-fits internally so the encoding doesn't leak the target
-    target_enc = ColumnTransformer([
-        ('cat', TargetEncoder(target_type='continuous'), CATEGORICAL),
-        ('num', 'passthrough', NUMERIC),
-    ])
-    # prices are right-skewed, so fit on log(price) and report errors in dollars
-    gbm = TransformedTargetRegressor(
-        regressor=HistGradientBoostingRegressor(
+def build_models(random_state, model='lightgbm', target='raw', with_ridge=False):
+    models = {'baseline (median)': DummyRegressor(strategy='median')}
+    if model == 'lightgbm':
+        # LightGBM splits on the Model / City categories directly, which beat
+        # target encoding in testing; a raw-dollar target gives the lowest RMSE,
+        # a log target the lowest MAE
+        models['lightgbm'] = CategoricalLGBM(CATEGORICAL, target=target, random_state=random_state)
+    else:
+        # City and Model have thousands of values, so the boosted model target-encodes
+        # them; TargetEncoder cross-fits internally so the encoding doesn't leak the target
+        target_enc = ColumnTransformer([
+            ('cat', TargetEncoder(target_type='continuous'), CATEGORICAL),
+            ('num', 'passthrough', NUMERIC),
+        ])
+        gbm = HistGradientBoostingRegressor(
             max_iter=3000, learning_rate=0.05, max_leaf_nodes=127, min_samples_leaf=40,
             l2_regularization=1.0, early_stopping=True, validation_fraction=0.1,
-            n_iter_no_change=50, random_state=random_state),
-        func=np.log, inverse_func=np.exp)
-    models = {
-        'baseline (median)': DummyRegressor(strategy='median'),
-        'gradient boosting': make_pipeline(target_enc, gbm),
-    }
+            n_iter_no_change=50, random_state=random_state)
+        if target == 'log':
+            gbm = TransformedTargetRegressor(regressor=gbm, func=np.log, inverse_func=np.exp)
+        models['gradient boosting'] = make_pipeline(target_enc, gbm)
     if with_ridge:
         one_hot = ColumnTransformer([
             ('cat', OneHotEncoder(handle_unknown='infrequent_if_exist', min_frequency=20), CATEGORICAL),
@@ -147,6 +152,8 @@ def main():
     parser.add_argument('--sample-frac', type=float, default=1.0, help='keep this fraction of rows from --sample-sources while reading')
     parser.add_argument('--sample-sources', default='absee', help='regex of sources to subsample (default: the SEC loan files)')
     parser.add_argument('--include-new', action='store_true', help='also train on new-car records (SEC loan filings)')
+    parser.add_argument('--model', choices=['lightgbm', 'hist'], default='lightgbm', help="lightgbm (default) or sklearn's HistGradientBoosting")
+    parser.add_argument('--target', choices=['raw', 'log'], default='raw', help='fit dollars (lowest RMSE) or log-dollars (lowest MAE)')
     parser.add_argument('--with-ridge', action='store_true', help='also fit a ridge regression (slow on large data)')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)
@@ -165,7 +172,7 @@ def main():
         X, y, test_size=args.test_size, random_state=args.random_state)
 
     results, fitted, predictions = {}, {}, {}
-    for name, model in build_models(args.random_state, args.with_ridge).items():
+    for name, model in build_models(args.random_state, args.model, args.target, args.with_ridge).items():
         model.fit(X_train, y_train)
         predictions[name] = model.predict(X_test)
         results[name] = evaluate(y_test, predictions[name])
@@ -189,7 +196,7 @@ def main():
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     joblib.dump(fitted[best], args.out)
     with open(os.path.splitext(args.out)[0] + '_metrics.json', 'w') as f:
-        json.dump({'best': best, 'n_rows': len(data), 'scrape_year': args.scrape_year,
+        json.dump({'best': best, 'n_rows': len(data), 'scrape_year': args.scrape_year, 'target': args.target,
                    'features': CATEGORICAL + NUMERIC, 'results': results, 'by_source': by_source}, f, indent=2)
     print('\nsaved {} to {}'.format(best, args.out))
 

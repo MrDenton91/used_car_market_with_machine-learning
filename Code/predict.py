@@ -9,6 +9,8 @@ import argparse
 import joblib
 import pandas as pd
 
+import pricing_model  # noqa: F401  (needed to unpickle the model)
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

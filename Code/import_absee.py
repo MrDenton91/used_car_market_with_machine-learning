@@ -43,6 +43,10 @@ MAKES = {'Chev': 'Chevrolet', 'Chevrole': 'Chevrolet', 'Chevrol': 'Chevrolet', '
          'Land Rov': 'Land Rover', 'Humm': 'Hummer', 'Jagu': 'Jaguar', 'Gmc Light Duty': 'Gmc',
          'Ford Truck': 'Ford', 'Ford Commercial': 'Ford', 'Bmw': 'BMW', 'Gmc': 'GMC'}
 STOP_WORDS = {'auto', 'automobile', 'financial', 'credit', 'lending', 'select', 'prime', 'llc'}
+NEEDED = ['assetNumber', 'reportingPeriodEndingDate', 'reportingPeriodEndDate', 'originationDate',
+          'vehicleManufacturerName', 'vehicleModelName', 'vehicleModelYear', 'vehicleNewUsedCode',
+          'vehicleTypeCode', 'vehicleValueAmount', 'vehicleValueSourceCode', 'obligorGeographicLocation',
+          'originalLoanAmount', 'obligorCreditScore']
 
 
 AUTO_TRUST = re.compile(r'(?i)auto|vehicle|car[_m]|leas|motor|drive')
@@ -115,7 +119,8 @@ def load_trust(folder):
             # each filing also has a one-row EX-103 document file; the asset data
             # file (EX-102) is the one with an assetNumber column
             if fn.endswith('.parquet') and 'assetNumber' in pq.read_schema(path).names:
-                frames.append(pd.read_parquet(path))
+                names = pq.read_schema(path).names
+                frames.append(pd.read_parquet(path, columns=[c for c in NEEDED if c in names]))
     if not frames:
         return None
     data = pd.concat(frames, ignore_index=True)
@@ -168,22 +173,26 @@ def main():
     if args.download:
         download(args.raw, args.filings)
 
-    frames = []
-    for name in sorted(os.listdir(args.raw)):
-        folder = os.path.join(args.raw, name)
-        if not os.path.isdir(folder):
-            continue
-        data = load_trust(folder)
-        if data is None:
-            continue
-        rows = convert(data, name)
-        frames.append(rows)
-        print('{:<70} {:>9,} vehicles'.format(name, len(rows)), flush=True)
-    data = pd.concat(frames, ignore_index=True)
-    data.to_csv(args.out, index=False)
-    print('\nsaved {:,} vehicles to {}'.format(len(data), args.out))
-    print(data['Status'].value_counts().to_dict())
-    print(data.groupby('Source').size().sort_values(ascending=False).to_dict())
+    # trusts are converted one at a time and appended, so memory stays small
+    total, by_source, by_status = 0, collections.Counter(), collections.Counter()
+    os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
+    with open(args.out, 'w', newline='') as out:
+        for name in sorted(os.listdir(args.raw)):
+            folder = os.path.join(args.raw, name)
+            if not os.path.isdir(folder):
+                continue
+            data = load_trust(folder)
+            if data is None:
+                continue
+            rows = convert(data, name)
+            rows.to_csv(out, index=False, header=(total == 0))
+            total += len(rows)
+            by_source.update(rows['Source'].value_counts().to_dict())
+            by_status.update(rows['Status'].value_counts().to_dict())
+            print('{:<70} {:>9,} vehicles'.format(name, len(rows)), flush=True)
+    print('\nsaved {:,} vehicles to {}'.format(total, args.out))
+    print(dict(by_status))
+    print(dict(by_source.most_common()))
 
 
 if __name__ == '__main__':

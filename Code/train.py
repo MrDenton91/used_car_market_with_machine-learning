@@ -79,7 +79,9 @@ def add_vin_specs(data, specs_path):
     for column, field in [('Trim', 'Trim'), ('Body Style', 'BodyClass'), ('Drive Type', 'DriveType'),
                           ('Fuel Type', 'FuelTypePrimary'), ('Transmission', 'TransmissionStyle')]:
         blank = data[column].isna() | data[column].isin(['', 'Unknown'])
-        data.loc[blank, column] = matched.loc[blank, field]
+        filled = data[column].astype(object)
+        filled[blank] = matched.loc[blank, field]
+        data[column] = filled
     data['Displacement'] = pd.to_numeric(matched['DisplacementL'], errors='coerce')
     data['Horsepower'] = pd.to_numeric(matched['EngineHP'], errors='coerce')
     data['Doors'] = pd.to_numeric(matched['Doors'], errors='coerce')

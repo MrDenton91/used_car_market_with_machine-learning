@@ -39,9 +39,10 @@ MIN_PRICE, MAX_PRICE = 500, 500_000
 MAX_MILEAGE = 500_000
 
 
-def load_data(paths, sample_frac=1.0, sample_sources='absee', random_state=10):
-    """Read the CSVs in chunks. Rows whose Source matches sample_sources (the big
-    SEC loan files) are subsampled to sample_frac so the data fits in memory."""
+def load_data(paths, sample_frac=1.0, sample_sources='absee', random_state=10, include_new=False):
+    """Read the CSVs in chunks, dropping new-car rows as they are read (unless
+    include_new) and subsampling rows whose Source matches sample_sources (the
+    big SEC loan files) to sample_frac, so the data fits in memory."""
     rng = np.random.default_rng(random_state)
     frames = []
     for p in paths:
@@ -56,6 +57,8 @@ def load_data(paths, sample_frac=1.0, sample_sources='absee', random_state=10):
         for chunk in reader:
             chunk = chunk.reindex(columns=COLUMNS + EXTRA)
             chunk['Source'] = chunk['Source'].fillna('cars.com')
+            if not include_new:
+                chunk = chunk[chunk['Status'] != 'New']
             if sample_frac < 1.0:
                 big = chunk['Source'].str.contains(sample_sources, regex=True, na=False)
                 chunk = chunk[~big | (rng.random(len(chunk)) < sample_frac)]
@@ -150,7 +153,7 @@ def main():
     parser.add_argument('--out', default='models/price_model.joblib')
     args = parser.parse_args()
 
-    data = clean(load_data(args.data, args.sample_frac, args.sample_sources, args.random_state),
+    data = clean(load_data(args.data, args.sample_frac, args.sample_sources, args.random_state, args.include_new),
                  args.scrape_year, args.include_new)
     if args.sample and args.sample < len(data):
         data = data.sample(args.sample, random_state=args.random_state)

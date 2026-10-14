@@ -14,7 +14,7 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
     at fit time (unseen levels at predict time become missing), holds out 10%
     of the rows for early stopping, and optionally fits log(price)."""
 
-    def __init__(self, categorical, target='raw', n_estimators=4000, learning_rate=0.05, num_leaves=127,
+    def __init__(self, categorical, target='raw', n_estimators=8000, learning_rate=0.05, num_leaves=127,
                  min_child_samples=40, reg_lambda=1.0, random_state=10):
         self.categorical = categorical
         self.target = target

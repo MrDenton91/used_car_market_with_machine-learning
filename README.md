@@ -8,14 +8,14 @@ Goal of this Machine Learning Project is simply:
 ## Results
 Original project (2020, ~100k cars.com listings, 9 features): gradient boosting RMSE **$8,396** against a median-price baseline of $19,298.
 
-Current `Code/train.py` on 6.05 million used vehicles (Craigslist 2021, ClassicCars.com, GSA auctions and a 40% sample of the SEC loan filings), 20% held out:
+Current `Code/train.py` (LightGBM, raw-dollar target) on 14.14 million used vehicles (Craigslist 2021, ClassicCars.com, GSA auctions and all used-car records from the SEC loan filings), 20% held out:
 
 | Model | RMSE | MAE | R² |
 |---|---|---|---|
-| Median-price baseline | $11,753 | $8,089 | – |
-| Gradient boosting | **$4,482** | **$2,665** | **0.85** |
+| Median-price baseline | $11,561 | $7,959 | – |
+| LightGBM | **$3,998** | **$2,568** | **0.875** |
 
-On everyday cars (leaving out the ClassicCars and Porsche slices, 0.3% of the test set) the RMSE is about $4,100. The largest single improvements were adding the sale year as a feature, the trim/transmission/engine/drivetrain/fuel/title columns, and more rows; see the per-source table that `train.py` prints.
+On everyday cars (leaving out the ClassicCars and Porsche slices, 0.1% of the test set) the RMSE is $3,867. What reduced the error, in order of effect: more rows, the sale year as a feature, LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, and fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that). Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
 
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 

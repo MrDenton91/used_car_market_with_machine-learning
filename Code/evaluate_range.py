@@ -9,6 +9,7 @@ Usage:
     python Code/evaluate_range.py data/*.csv --low models/price_low.joblib --high models/price_high.joblib
 """
 import argparse
+import os
 import sys
 
 import joblib
@@ -38,6 +39,8 @@ def main():
     parser.add_argument('--vin-specs', default='data/vin_specs.csv')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)
+    parser.add_argument('--cache', help='directory to keep each model\'s test predictions in (point.npy, low.npy, high.npy), '
+                        'so a re-run after a crash or with a new model only scores what changed')
     args = parser.parse_args()
 
     data = train.clean(train.load_data(args.data, random_state=args.random_state), args.scrape_year, vin_specs=args.vin_specs)
@@ -46,9 +49,20 @@ def main():
     _, X_test, _, y_test = train_test_split(X, y, test_size=args.test_size, random_state=args.random_state)
     print('{:,} test cars'.format(len(X_test)), flush=True)
 
-    pred = joblib.load(args.model).predict(X_test)
-    low = np.minimum(joblib.load(args.low).predict(X_test), pred)
-    high = np.maximum(joblib.load(args.high).predict(X_test), pred)
+    def predictions(name, model_file):
+        cached = os.path.join(args.cache, name + '.npy') if args.cache else None
+        if cached and os.path.exists(cached):
+            return np.load(cached)
+        pred = joblib.load(model_file).predict(X_test)
+        if cached:
+            os.makedirs(args.cache, exist_ok=True)
+            np.save(cached, pred)
+        print('scored {}'.format(name), flush=True)
+        return pred
+
+    pred = predictions('point', args.model)
+    low = np.minimum(predictions('low', args.low), pred)
+    high = np.maximum(predictions('high', args.high), pred)
     y = y_test.to_numpy(dtype=float)
 
     header = '{:<24} {:>9} {:>8} {:>8} {:>8} {:>10} {:>8}'.format(

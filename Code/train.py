@@ -152,7 +152,14 @@ def clean(data, scrape_year, include_new=False, vin_specs=None):
 
 
 def build_models(random_state, model='lightgbm', target='raw', with_ridge=False, trees=8000, continue_from=None,
-                 booster_file=None, checkpoint_file=None, leaves=511):
+                 booster_file=None, checkpoint_file=None, leaves=511, quantile=None):
+    if quantile is not None:
+        # a price-range bound: only lightgbm supports the pinball loss here
+        init = joblib.load(continue_from) if continue_from else None
+        return {'baseline (quantile)': DummyRegressor(strategy='quantile', quantile=quantile),
+                'lightgbm': CategoricalLGBM(CATEGORICAL, target=target, n_estimators=trees, num_leaves=leaves,
+                                            random_state=random_state, init_model=init, booster_file=booster_file,
+                                            checkpoint_file=checkpoint_file, quantile=quantile)}
     models = {'baseline (median)': DummyRegressor(strategy='median')}
     if model == 'lightgbm':
         # LightGBM splits on the Model / City categories directly, which beat
@@ -185,7 +192,18 @@ def build_models(random_state, model='lightgbm', target='raw', with_ridge=False,
     return models
 
 
-def evaluate(y, y_pred):
+def evaluate(y, y_pred, quantile=None):
+    if quantile is not None:
+        # a quantile model is judged on how often the price falls below its
+        # prediction (should be the quantile) and on the pinball loss it was fitted with
+        y, y_pred = np.asarray(y, dtype=float), np.asarray(y_pred, dtype=float)
+        diff = y - y_pred
+        return {
+            'coverage': float((y <= y_pred).mean()),
+            'pinball': float(np.mean(np.where(diff >= 0, quantile * diff, (quantile - 1) * diff))),
+            'mae': float(np.abs(diff).mean()),
+            'n': int(len(y)),
+        }
     return {
         'rmse': float(np.sqrt(mean_squared_error(y, y_pred))),
         'mae': float(mean_absolute_error(y, y_pred)),
@@ -210,6 +228,8 @@ def main():
     parser.add_argument('--continue-from', help='a saved lightgbm model to add up to --trees more trees to (same data and options)')
     parser.add_argument('--booster-file', help='with --continue-from: resume from this checkpoint instead of the saved model\'s trees')
     parser.add_argument('--checkpoint', help='save the booster to this file every 500 trees (resume with --booster-file)')
+    parser.add_argument('--quantile', type=float, help='fit this quantile of the price (e.g. 0.1 or 0.9) instead of its mean, '
+                        'to give a price range; saved like any other model')
     parser.add_argument('--with-ridge', action='store_true', help='also fit a ridge regression (slow on large data)')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)
@@ -229,32 +249,44 @@ def main():
 
     results, fitted, predictions = {}, {}, {}
     for name, model in build_models(args.random_state, args.model, args.target, args.with_ridge, args.trees, args.continue_from,
-                                    args.booster_file, args.checkpoint, args.leaves).items():
+                                    args.booster_file, args.checkpoint, args.leaves, args.quantile).items():
         model.fit(X_train, y_train)
         predictions[name] = model.predict(X_test)
-        results[name] = evaluate(y_test, predictions[name])
+        results[name] = evaluate(y_test, predictions[name], args.quantile)
         fitted[name] = model
 
-    base_rmse = results['baseline (median)']['rmse']
-    print('\n{:<20}{:>12}{:>12}{:>8}{:>14}'.format('model', 'RMSE', 'MAE', 'R2', 'RMSE/base'))
-    for name, m in results.items():
-        print('{:<20}{:>12,.0f}{:>12,.0f}{:>8.3f}{:>14.2f}'.format(
-            name, m['rmse'], m['mae'], m['r2'], m['rmse'] / base_rmse))
-
-    best = min(results, key=lambda name: results[name]['rmse'])
     by_source = {}
-    print('\n{} by source:'.format(best))
-    print('{:<28}{:>10}{:>12}{:>12}{:>8}'.format('source', 'rows', 'RMSE', 'MAE', 'R2'))
-    for source, idx in X_test.groupby('Source').indices.items():
-        m = evaluate(y_test.iloc[idx], predictions[best][idx])
-        by_source[source] = m
-        print('{:<28}{:>10,}{:>12,.0f}{:>12,.0f}{:>8.3f}'.format(source, m['n'], m['rmse'], m['mae'], m['r2']))
+    if args.quantile is not None:
+        print('\n{:<20}{:>12}{:>12}{:>12}'.format('model', 'coverage', 'pinball', 'MAE'))
+        for name, m in results.items():
+            print('{:<20}{:>12.3f}{:>12,.0f}{:>12,.0f}'.format(name, m['coverage'], m['pinball'], m['mae']))
+        best = min(results, key=lambda name: results[name]['pinball'])
+        print('\n{} by source (target coverage {:.2f}):'.format(best, args.quantile))
+        print('{:<28}{:>10}{:>12}{:>12}'.format('source', 'rows', 'coverage', 'pinball'))
+        for source, idx in X_test.groupby('Source').indices.items():
+            m = evaluate(y_test.iloc[idx], predictions[best][idx], args.quantile)
+            by_source[source] = m
+            print('{:<28}{:>10,}{:>12.3f}{:>12,.0f}'.format(source, m['n'], m['coverage'], m['pinball']))
+    else:
+        base_rmse = results['baseline (median)']['rmse']
+        print('\n{:<20}{:>12}{:>12}{:>8}{:>14}'.format('model', 'RMSE', 'MAE', 'R2', 'RMSE/base'))
+        for name, m in results.items():
+            print('{:<20}{:>12,.0f}{:>12,.0f}{:>8.3f}{:>14.2f}'.format(
+                name, m['rmse'], m['mae'], m['r2'], m['rmse'] / base_rmse))
+
+        best = min(results, key=lambda name: results[name]['rmse'])
+        print('\n{} by source:'.format(best))
+        print('{:<28}{:>10}{:>12}{:>12}{:>8}'.format('source', 'rows', 'RMSE', 'MAE', 'R2'))
+        for source, idx in X_test.groupby('Source').indices.items():
+            m = evaluate(y_test.iloc[idx], predictions[best][idx])
+            by_source[source] = m
+            print('{:<28}{:>10,}{:>12,.0f}{:>12,.0f}{:>8.3f}'.format(source, m['n'], m['rmse'], m['mae'], m['r2']))
 
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     joblib.dump(fitted[best], args.out)
     with open(os.path.splitext(args.out)[0] + '_metrics.json', 'w') as f:
         json.dump({'best': best, 'n_rows': len(data), 'scrape_year': args.scrape_year, 'target': args.target,
-                   'features': CATEGORICAL + NUMERIC, 'results': results, 'by_source': by_source}, f, indent=2)
+                   'quantile': args.quantile, 'features': CATEGORICAL + NUMERIC, 'results': results, 'by_source': by_source}, f, indent=2)
     print('\nsaved {} to {}'.format(best, args.out))
 
 

@@ -3,8 +3,13 @@
 Usage:
     python Code/predict.py --make Toyota --model Camry --year 2016 --mileage 45000 \
         --body-style Sedan --city Denver --state CO --color Silver
+
+With the 10th- and 90th-percentile models from `train.py --quantile 0.1 / 0.9`
+(the defaults models/price_low.joblib and models/price_high.joblib, when present)
+it also prints the range 80% of such cars sell in.
 """
 import argparse
+import os
 
 import joblib
 import pandas as pd
@@ -31,6 +36,8 @@ def text_flags(description, private_seller=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--model-file', default='models/price_model.joblib')
+    parser.add_argument('--low-file', default='models/price_low.joblib', help='10th-percentile model (skipped if missing)')
+    parser.add_argument('--high-file', default='models/price_high.joblib', help='90th-percentile model (skipped if missing)')
     parser.add_argument('--scrape-year', type=int, default=2020,
                         help='must match the --scrape-year the model was trained with')
     parser.add_argument('--make', required=True)
@@ -66,6 +73,10 @@ def main():
     }])
     price = joblib.load(args.model_file).predict(car)[0]
     print('${:,.0f}'.format(price))
+    if os.path.exists(args.low_file) and os.path.exists(args.high_file):
+        low = joblib.load(args.low_file).predict(car)[0]
+        high = joblib.load(args.high_file).predict(car)[0]
+        print('80% range: ${:,.0f} - ${:,.0f}'.format(min(low, price), max(high, price)))
 
 
 if __name__ == '__main__':

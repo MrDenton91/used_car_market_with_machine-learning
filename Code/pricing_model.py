@@ -12,11 +12,15 @@ from sklearn.model_selection import train_test_split
 class CategoricalLGBM(BaseEstimator, RegressorMixin):
     """LightGBM regressor that learns the category levels of the string columns
     at fit time (unseen levels at predict time become missing), holds out 10%
-    of the rows for early stopping, and optionally fits log(price)."""
+    of the rows for early stopping, and optionally fits log(price).
+
+    With quantile set (e.g. 0.1), the model is fitted with the pinball loss and
+    predicts that quantile of the price instead of its mean; a 0.1 and a 0.9
+    model together give an 80% price range."""
 
     def __init__(self, categorical, target='raw', n_estimators=8000, learning_rate=0.05, num_leaves=511,
                  min_child_samples=60, reg_lambda=1.0, random_state=10, init_model=None, booster_file=None,
-                 checkpoint_file=None, checkpoint_every=500):
+                 checkpoint_file=None, checkpoint_every=500, quantile=None):
         self.categorical = categorical
         self.init_model = init_model      # a fitted CategoricalLGBM to add trees to (same data and split)
         self.booster_file = booster_file  # resume from this saved booster instead of init_model's trees
@@ -29,6 +33,7 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
         self.min_child_samples = min_child_samples
         self.reg_lambda = reg_lambda
         self.random_state = random_state
+        self.quantile = quantile
 
     def _encode(self, X):
         X = X.copy()
@@ -46,11 +51,12 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
         X = self._encode(X)
         y = np.log(y) if self.target == 'log' else np.asarray(y, dtype=float)
         X_fit, X_val, y_fit, y_val = train_test_split(X, y, test_size=0.1, random_state=self.random_state)
+        objective = {'objective': 'quantile', 'alpha': self.quantile} if self.quantile is not None else {}
         self.model_ = lgb.LGBMRegressor(
             n_estimators=self.n_estimators, learning_rate=self.learning_rate, num_leaves=self.num_leaves,
             min_child_samples=self.min_child_samples, reg_lambda=self.reg_lambda,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8, cat_smooth=20,
-            verbose=-1, random_state=self.random_state)
+            verbose=-1, random_state=self.random_state, **objective)
         previous = self.booster_file or (self.init_model.model_.booster_ if self.init_model is not None else None)
         callbacks = [lgb.early_stopping(50, verbose=False)]
         if self.checkpoint_file:

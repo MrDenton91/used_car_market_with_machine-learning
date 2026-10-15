@@ -15,9 +15,13 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
     of the rows for early stopping, and optionally fits log(price)."""
 
     def __init__(self, categorical, target='raw', n_estimators=8000, learning_rate=0.05, num_leaves=127,
-                 min_child_samples=40, reg_lambda=1.0, random_state=10, init_model=None):
+                 min_child_samples=40, reg_lambda=1.0, random_state=10, init_model=None, booster_file=None,
+                 checkpoint_file=None, checkpoint_every=500):
         self.categorical = categorical
         self.init_model = init_model      # a fitted CategoricalLGBM to add trees to (same data and split)
+        self.booster_file = booster_file  # resume from this saved booster instead of init_model's trees
+        self.checkpoint_file = checkpoint_file   # save the booster here every checkpoint_every trees
+        self.checkpoint_every = checkpoint_every
         self.target = target
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
@@ -47,9 +51,15 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
             min_child_samples=self.min_child_samples, reg_lambda=self.reg_lambda,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8, cat_smooth=20,
             verbose=-1, random_state=self.random_state)
-        previous = self.init_model.model_.booster_ if self.init_model is not None else None
-        self.model_.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], init_model=previous,
-                        callbacks=[lgb.early_stopping(50, verbose=False)])
+        previous = self.booster_file or (self.init_model.model_.booster_ if self.init_model is not None else None)
+        callbacks = [lgb.early_stopping(50, verbose=False)]
+        if self.checkpoint_file:
+            def checkpoint(env):
+                if (env.iteration + 1) % self.checkpoint_every == 0:
+                    env.model.save_model(self.checkpoint_file)
+                    print('checkpoint: {} trees'.format(env.model.num_trees()), flush=True)
+            callbacks.append(checkpoint)
+        self.model_.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], init_model=previous, callbacks=callbacks)
         # with init_model, best_iteration_ counts the new trees; the booster holds all of them
         self.n_trees_ = self.model_.booster_.num_trees()
         return self

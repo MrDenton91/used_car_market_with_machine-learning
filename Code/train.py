@@ -131,7 +131,8 @@ def clean(data, scrape_year, include_new=False, vin_specs=None):
     return data.drop(columns=['Year', 'Status', 'Listing ID', 'VIN']).reset_index(drop=True)
 
 
-def build_models(random_state, model='lightgbm', target='raw', with_ridge=False, trees=8000, continue_from=None):
+def build_models(random_state, model='lightgbm', target='raw', with_ridge=False, trees=8000, continue_from=None,
+                 booster_file=None, checkpoint_file=None):
     models = {'baseline (median)': DummyRegressor(strategy='median')}
     if model == 'lightgbm':
         # LightGBM splits on the Model / City categories directly, which beat
@@ -139,7 +140,7 @@ def build_models(random_state, model='lightgbm', target='raw', with_ridge=False,
         # a log target the lowest MAE
         init = joblib.load(continue_from) if continue_from else None
         models['lightgbm'] = CategoricalLGBM(CATEGORICAL, target=target, n_estimators=trees, random_state=random_state,
-                                             init_model=init)
+                                             init_model=init, booster_file=booster_file, checkpoint_file=checkpoint_file)
     else:
         # City and Model have thousands of values, so the boosted model target-encodes
         # them; TargetEncoder cross-fits internally so the encoding doesn't leak the target
@@ -185,6 +186,8 @@ def main():
     parser.add_argument('--target', choices=['raw', 'log'], default='raw', help='fit dollars (lowest RMSE) or log-dollars (lowest MAE)')
     parser.add_argument('--trees', type=int, default=8000, help='maximum trees for lightgbm; early stopping picks the number used')
     parser.add_argument('--continue-from', help='a saved lightgbm model to add up to --trees more trees to (same data and options)')
+    parser.add_argument('--booster-file', help='with --continue-from: resume from this checkpoint instead of the saved model\'s trees')
+    parser.add_argument('--checkpoint', help='save the booster to this file every 500 trees (resume with --booster-file)')
     parser.add_argument('--with-ridge', action='store_true', help='also fit a ridge regression (slow on large data)')
     parser.add_argument('--test-size', type=float, default=0.2)
     parser.add_argument('--random-state', type=int, default=10)
@@ -203,7 +206,8 @@ def main():
         X, y, test_size=args.test_size, random_state=args.random_state)
 
     results, fitted, predictions = {}, {}, {}
-    for name, model in build_models(args.random_state, args.model, args.target, args.with_ridge, args.trees, args.continue_from).items():
+    for name, model in build_models(args.random_state, args.model, args.target, args.with_ridge, args.trees, args.continue_from,
+                                    args.booster_file, args.checkpoint).items():
         model.fit(X_train, y_train)
         predictions[name] = model.predict(X_test)
         results[name] = evaluate(y_test, predictions[name])

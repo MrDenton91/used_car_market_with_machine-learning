@@ -17,6 +17,20 @@ Current `Code/train.py` (LightGBM, raw-dollar target) on 14.14 million used vehi
 
 On the Craigslist listings, which have VINs and listing text, the RMSE is $4,567. What reduced the error, in order of effect: more rows, the sale year and month as features, VIN-decoded trim and engine specs and the listing-text flags (for rows that have them), LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that), and 511 leaves per tree instead of 127 (better and fewer trees). CatBoost was tried and was worse alone; averaging it with LightGBM gained ~1% but costs far more training time. Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
 
+### How accurate is it, in practice?
+Percentage errors on the held-out test set (2.83M cars), from the current model:
+
+| Segment | Cars | Median error | Within 10% | Within 20% | Bias |
+|---|---|---|---|---|---|
+| All | 2.83M | 8.1% | 59% | 86% | +2.5% |
+| $10,000–60,000, under ~8 years old | ~2.5M | 7–8% | 58–63% | 86–90% | ≈0 |
+| $5,000–10,000 | 155k | 15% | 35% | 61% | +16% |
+| Under $5,000 | 13k | 32% | 19% | 35% | +108% |
+| Over $60,000 | 26k | 10% | 51% | 75% | −10% |
+| Over 15 years old / classics | 21k | 20–39% | 15–29% | 28–49% | +21–49% |
+
+Reliable as a valuation / screening tool for mainstream cars ($10k–60k, under about 8 years old, mileage known); not precise enough to set a final price without inspection, and not to be used for cheap, very old or collector cars, where condition, which no source records, dominates the price.
+
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 
 Each datapoint represents a unique car being sold in the U.S. Cars.com refreshes the cars being shown on their website every couple of days. As such new data could be collected and added to total data set.

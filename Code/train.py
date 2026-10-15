@@ -38,6 +38,8 @@ TEXT = ['Condition', 'Dealer Listing', 'One Owner', 'Low Miles Claim', 'Clean Ti
 EXTRA = ['Source', 'Status', 'Listing ID', 'VIN', 'Description Length'] + DETAILS + TEXT
 CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color'] + DETAILS + TEXT
 NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage', 'Displacement', 'Horsepower', 'Doors', 'Description Length']
+# few distinct values: stored as pandas categories while loading to keep memory small
+LOW_CARDINALITY = ['Source', 'Status', 'Body Style', 'State', 'Color'] + DETAILS + TEXT
 
 # listings outside these ranges are data-entry errors (e.g. $100,000,000 cars)
 MIN_PRICE, MAX_PRICE = 500, 500_000
@@ -67,8 +69,15 @@ def load_data(paths, sample_frac=1.0, sample_sources='absee', random_state=10, i
             if sample_frac < 1.0:
                 big = chunk['Source'].str.contains(sample_sources, regex=True, na=False)
                 chunk = chunk[~big | (rng.random(len(chunk)) < sample_frac)]
-            frames.append(chunk[chunk['Price'] != 'Price'])
-    return pd.concat(frames, ignore_index=True)
+            chunk = chunk[chunk['Price'] != 'Price']
+            for col in LOW_CARDINALITY:
+                chunk[col] = chunk[col].astype(str).str.strip().replace({'nan': 'Unknown', '': 'Unknown'}).astype('category')
+            frames.append(chunk)
+    data = pd.concat(frames, ignore_index=True)
+    # concat turns categories with different levels back into strings; re-categorise
+    for col in LOW_CARDINALITY:
+        data[col] = data[col].astype('category')
+    return data
 
 
 def add_vin_specs(data, specs_path):
@@ -85,6 +94,8 @@ def add_vin_specs(data, specs_path):
         filled = data[column].astype(object)
         filled[blank] = matched.loc[blank, field]
         data[column] = filled
+        if column in LOW_CARDINALITY:
+            data[column] = data[column].astype('category')
     data['Displacement'] = pd.to_numeric(matched['DisplacementL'], errors='coerce')
     data['Horsepower'] = pd.to_numeric(matched['EngineHP'], errors='coerce')
     data['Doors'] = pd.to_numeric(matched['Doors'], errors='coerce')
@@ -92,7 +103,6 @@ def add_vin_specs(data, specs_path):
 
 
 def clean(data, scrape_year, include_new=False, vin_specs=None):
-    data = data.copy()
     for col in ['Displacement', 'Horsepower', 'Doors']:
         data[col] = np.nan
     if vin_specs and os.path.exists(vin_specs):
@@ -105,15 +115,21 @@ def clean(data, scrape_year, include_new=False, vin_specs=None):
     if not include_new:   # loan filings also cover new cars
         data = data[data['Status'] != 'New']
     # lender names from the loan filings: 'absee:harley davidson motorcycle trust ...' -> 'absee:harley davidson'
-    data['Source'] = data['Source'].str.replace(r' (motorcycle|vehicle|trust|leasing|lease)\b.*$', '', regex=True)
+    data['Source'] = data['Source'].astype(str).str.replace(r' (motorcycle|vehicle|trust|leasing|lease)\b.*$', '', regex=True).astype('category')
     # sources leave these blank when a listing doesn't say
-    data[['Body Style', 'City', 'Color'] + DETAILS + TEXT] = data[['Body Style', 'City', 'Color'] + DETAILS + TEXT].fillna('Unknown')
+    for col in ['Body Style', 'City', 'Color'] + DETAILS + TEXT:
+        if isinstance(data[col].dtype, pd.CategoricalDtype):
+            if data[col].isna().any():
+                data[col] = data[col].cat.add_categories(['Unknown']).fillna('Unknown') if 'Unknown' not in data[col].cat.categories else data[col].fillna('Unknown')
+        else:
+            data[col] = data[col].fillna('Unknown')
     data['Description Length'] = pd.to_numeric(data['Description Length'], errors='coerce')
     # mileage may be missing (e.g. loan filings); the models handle that, so
     # only the other features are required
     data = data.dropna(subset=[c for c in FEATURES if c != 'Milage'])
     for col in CATEGORICAL:
-        data[col] = data[col].astype(str).str.strip()
+        if not isinstance(data[col].dtype, pd.CategoricalDtype):
+            data[col] = data[col].astype(str).str.strip()
     # sources spell models differently (CR-V / Crv / CRV, F-150 / F150); merge them
     data['Model'] = data['Model'].str.upper().str.replace(r'[^A-Z0-9]', '', regex=True).replace('', 'UNKNOWN')
     data['Make'] = data['Make'].str.title()

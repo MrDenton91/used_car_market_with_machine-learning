@@ -43,6 +43,9 @@ def main():
         'Drive Type': args.drive_type, 'Fuel Type': args.fuel_type, 'Title Status': args.title_status,
         'Age': sale_year - args.year, 'Sale Year': sale_year, 'Sale Time': sale_year + (args.sale_month - 1) / 12,
         'Milage': args.mileage, 'Displacement': args.displacement, 'Horsepower': args.horsepower, 'Doors': args.doors,
+        'Description Length': float('nan'),
+        **{flag: 'Unknown' for flag in ['Condition', 'Dealer Listing', 'One Owner', 'Low Miles Claim', 'Clean Title Claim',
+                                        'No Accidents', 'Custom', 'Rust', 'Needs Work', 'Not Running', 'Salvage Mentioned']},
     }])
     price = joblib.load(args.model_file).predict(car)[0]
     print('${:,.0f}'.format(price))

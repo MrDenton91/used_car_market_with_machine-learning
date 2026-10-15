@@ -18,7 +18,20 @@ RENAME = {
     'region': 'City', 'state': 'State', 'odometer': 'Milage', 'paint_color': 'Color',
     'posting_date': 'Date Scraped', 'id': 'Listing ID', 'VIN': 'VIN', 'transmission': 'Transmission',
     'cylinders': 'Engine', 'drive': 'Drive Type', 'fuel': 'Fuel Type', 'title_status': 'Title Status',
-    'url': 'URL',
+    'url': 'URL', 'condition': 'Condition', 'description': 'description',
+}
+# listing-text signals (regex on the lower-cased description) -> Yes / No columns
+TEXT_FLAGS = {
+    'Dealer Listing': r'financ|warranty|dealer|apr\b|credit (?:approval|application)|trade[- ]ins?',
+    'One Owner': r'one[- ]owner|1[- ]owner',
+    'Low Miles Claim': r'low miles|low mileage',
+    'Clean Title Claim': r'clean title',
+    'No Accidents': r'no accidents?',
+    'Custom': r'lifted|custom wheels|aftermarket',
+    'Rust': r'\brust',
+    'Needs Work': r'needs? (?:work|repair|fix)|mechanic special|as[- ]is',
+    'Not Running': r"(?:doesn't|does not|don't|not) (?:run|start)|non[- ]?running|blown (?:engine|motor|head)",
+    'Salvage Mentioned': r'salvage|rebuilt',
 }
 
 
@@ -45,10 +58,15 @@ def main():
     for col in ['Body Style', 'Color']:
         data[col] = data[col].str.title()
     data['Date Scraped'] = pd.to_datetime(data['Date Scraped'], errors='coerce', utc=True).dt.strftime('%Y-%m-%d')
+    data['Condition'] = data['Condition'].str.title()
+    text = data.pop('description').fillna('').str.lower()
+    for column, pattern in TEXT_FLAGS.items():
+        data[column] = text.str.contains(pattern, regex=True).map({True: 'Yes', False: 'No'})
+    data['Description Length'] = text.str.len()
     for col in ['Year', 'Milage']:
         data[col] = pd.to_numeric(data[col], errors='coerce').astype('Int64')
 
-    data.reindex(columns=COLUMNS).to_csv(args.out, index=False)
+    data.reindex(columns=COLUMNS + ['Condition'] + list(TEXT_FLAGS) + ['Description Length']).to_csv(args.out, index=False)
     print('saved {:,} listings to {}'.format(len(data), args.out))
     print('posted {} to {}'.format(data['Date Scraped'].min(), data['Date Scraped'].max()))
 

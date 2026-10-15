@@ -32,9 +32,12 @@ FEATURES = ['Price', 'Make', 'Model', 'Year', 'Body Style', 'City', 'State', 'Mi
 COLUMNS = FEATURES + ['Date Scraped']
 # the collect_*.py / import_*.py CSVs have a header and these extra columns
 DETAILS = ['Trim', 'Transmission', 'Engine', 'Drive Type', 'Fuel Type', 'Title Status']
-EXTRA = ['Source', 'Status', 'Listing ID', 'VIN'] + DETAILS
-CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color'] + DETAILS
-NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage', 'Displacement', 'Horsepower', 'Doors']
+# from the Craigslist listing text (import_craigslist.py); 'Unknown' for other sources
+TEXT = ['Condition', 'Dealer Listing', 'One Owner', 'Low Miles Claim', 'Clean Title Claim', 'No Accidents',
+        'Custom', 'Rust', 'Needs Work', 'Not Running', 'Salvage Mentioned']
+EXTRA = ['Source', 'Status', 'Listing ID', 'VIN', 'Description Length'] + DETAILS + TEXT
+CATEGORICAL = ['Source', 'Make', 'Model', 'Body Style', 'City', 'State', 'Color'] + DETAILS + TEXT
+NUMERIC = ['Age', 'Sale Year', 'Sale Time', 'Milage', 'Displacement', 'Horsepower', 'Doors', 'Description Length']
 
 # listings outside these ranges are data-entry errors (e.g. $100,000,000 cars)
 MIN_PRICE, MAX_PRICE = 500, 500_000
@@ -104,7 +107,8 @@ def clean(data, scrape_year, include_new=False, vin_specs=None):
     # lender names from the loan filings: 'absee:harley davidson motorcycle trust ...' -> 'absee:harley davidson'
     data['Source'] = data['Source'].str.replace(r' (motorcycle|vehicle|trust|leasing|lease)\b.*$', '', regex=True)
     # sources leave these blank when a listing doesn't say
-    data[['Body Style', 'City', 'Color'] + DETAILS] = data[['Body Style', 'City', 'Color'] + DETAILS].fillna('Unknown')
+    data[['Body Style', 'City', 'Color'] + DETAILS + TEXT] = data[['Body Style', 'City', 'Color'] + DETAILS + TEXT].fillna('Unknown')
+    data['Description Length'] = pd.to_numeric(data['Description Length'], errors='coerce')
     # mileage may be missing (e.g. loan filings); the models handle that, so
     # only the other features are required
     data = data.dropna(subset=[c for c in FEATURES if c != 'Milage'])

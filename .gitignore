@@ -7,3 +7,6 @@ models/
 
 .ipynb_checkpoints/
 __pycache__/
+
+# scratch output of catboost runs
+catboost_info/

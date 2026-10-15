@@ -89,7 +89,7 @@ cars.com now blocks automated requests, so new data comes from sources that allo
 
 | `Code/import_absee.py` | SEC Form ABS-EE auto-loan filings (public records; parquet copies on Hugging Face by DenyTranDFW, spot-checked against EDGAR) | ~6.8 million financed vehicles from CarMax, Toyota, Honda, GM Financial, Ally, Santander, Ford Credit and others, 2010–2026: make, model, year, new/used, type, state, and the vehicle's value at the time of the loan (for CarMax, its retail sale price). No mileage, city or color. `--download` fetches the first three filings of each trust (~1.5 GB). |
 | `Code/decode_vins.py` | NHTSA vPIC (free, no key) | Decodes every VIN in the data files into trim, body style, drivetrain, fuel, transmission, engine size, horsepower and doors (`data/vin_specs.csv`, resumable). `train.py` uses it automatically; on the Craigslist rows it cut RMSE 6% and MAE 9%. |
-| `Code/import_craigslist.py` | [Used Cars Dataset](https://zenodo.org/records/10457828) (CC-BY-4.0; CC0 on OpenML) | 426,880 US Craigslist listings posted April–May 2021, converted to the same format. Download the zip from Zenodo first. |
+| `Code/import_craigslist.py` | [Used Cars Dataset](https://zenodo.org/records/10457828) (CC-BY-4.0; CC0 on OpenML) | 426,880 US Craigslist listings posted April–May 2021, converted to the same format, keeping the seller's condition rating and Yes/No flags read from the listing text (dealer listing, one owner, needs work, salvage mentioned, ...). On these rows the flags cut RMSE a further 5.6%. Download the zip from Zenodo first. |
 
 `train.py` skips new-car records by default (`--include-new` adds them) and uses `Source` as a feature, so each lender's values are modelled separately from listing prices.
 

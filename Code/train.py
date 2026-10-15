@@ -152,15 +152,16 @@ def clean(data, scrape_year, include_new=False, vin_specs=None):
 
 
 def build_models(random_state, model='lightgbm', target='raw', with_ridge=False, trees=8000, continue_from=None,
-                 booster_file=None, checkpoint_file=None):
+                 booster_file=None, checkpoint_file=None, leaves=511):
     models = {'baseline (median)': DummyRegressor(strategy='median')}
     if model == 'lightgbm':
         # LightGBM splits on the Model / City categories directly, which beat
         # target encoding in testing; a raw-dollar target gives the lowest RMSE,
         # a log target the lowest MAE
         init = joblib.load(continue_from) if continue_from else None
-        models['lightgbm'] = CategoricalLGBM(CATEGORICAL, target=target, n_estimators=trees, random_state=random_state,
-                                             init_model=init, booster_file=booster_file, checkpoint_file=checkpoint_file)
+        models['lightgbm'] = CategoricalLGBM(CATEGORICAL, target=target, n_estimators=trees, num_leaves=leaves,
+                                             random_state=random_state, init_model=init, booster_file=booster_file,
+                                             checkpoint_file=checkpoint_file)
     else:
         # City and Model have thousands of values, so the boosted model target-encodes
         # them; TargetEncoder cross-fits internally so the encoding doesn't leak the target
@@ -205,6 +206,7 @@ def main():
     parser.add_argument('--model', choices=['lightgbm', 'hist'], default='lightgbm', help="lightgbm (default) or sklearn's HistGradientBoosting")
     parser.add_argument('--target', choices=['raw', 'log'], default='raw', help='fit dollars (lowest RMSE) or log-dollars (lowest MAE)')
     parser.add_argument('--trees', type=int, default=8000, help='maximum trees for lightgbm; early stopping picks the number used')
+    parser.add_argument('--leaves', type=int, default=511, help='leaves per lightgbm tree (511 beat 127 and 255 in testing)')
     parser.add_argument('--continue-from', help='a saved lightgbm model to add up to --trees more trees to (same data and options)')
     parser.add_argument('--booster-file', help='with --continue-from: resume from this checkpoint instead of the saved model\'s trees')
     parser.add_argument('--checkpoint', help='save the booster to this file every 500 trees (resume with --booster-file)')
@@ -227,7 +229,7 @@ def main():
 
     results, fitted, predictions = {}, {}, {}
     for name, model in build_models(args.random_state, args.model, args.target, args.with_ridge, args.trees, args.continue_from,
-                                    args.booster_file, args.checkpoint).items():
+                                    args.booster_file, args.checkpoint, args.leaves).items():
         model.fit(X_train, y_train)
         predictions[name] = model.predict(X_test)
         results[name] = evaluate(y_test, predictions[name])

@@ -13,9 +13,9 @@ Current `Code/train.py` (LightGBM, raw-dollar target) on 14.14 million used vehi
 | Model | RMSE | MAE | R² |
 |---|---|---|---|
 | Median-price baseline | $11,561 | $7,959 | – |
-| LightGBM | **$3,758** | **$2,364** | **0.889** |
+| LightGBM | **$3,708** | **$2,326** | **0.892** |
 
-On the Craigslist listings, which have VINs and listing text, the RMSE is $4,627. What reduced the error, in order of effect: more rows, the sale year and month as features, VIN-decoded trim and engine specs and the listing-text flags (for rows that have them), LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, and fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that). Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
+On the Craigslist listings, which have VINs and listing text, the RMSE is $4,567. What reduced the error, in order of effect: more rows, the sale year and month as features, VIN-decoded trim and engine specs and the listing-text flags (for rows that have them), LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that), and 511 leaves per tree instead of 127 (better and fewer trees). CatBoost was tried and was worse alone; averaging it with LightGBM gained ~1% but costs far more training time. Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
 
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 

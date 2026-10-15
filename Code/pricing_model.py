@@ -15,8 +15,9 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
     of the rows for early stopping, and optionally fits log(price)."""
 
     def __init__(self, categorical, target='raw', n_estimators=8000, learning_rate=0.05, num_leaves=127,
-                 min_child_samples=40, reg_lambda=1.0, random_state=10):
+                 min_child_samples=40, reg_lambda=1.0, random_state=10, init_model=None):
         self.categorical = categorical
+        self.init_model = init_model      # a fitted CategoricalLGBM to add trees to (same data and split)
         self.target = target
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
@@ -33,7 +34,10 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
 
     def fit(self, X, y):
         import lightgbm as lgb
-        self.categories_ = {col: pd.Index(X[col].astype(str).unique()) for col in self.categorical}
+        if self.init_model is not None:   # keep the category codes the earlier trees were built on
+            self.categories_ = self.init_model.categories_
+        else:
+            self.categories_ = {col: pd.Index(X[col].astype(str).unique()) for col in self.categorical}
         self.columns_ = list(X.columns)
         X = self._encode(X)
         y = np.log(y) if self.target == 'log' else np.asarray(y, dtype=float)
@@ -43,9 +47,11 @@ class CategoricalLGBM(BaseEstimator, RegressorMixin):
             min_child_samples=self.min_child_samples, reg_lambda=self.reg_lambda,
             subsample=0.8, subsample_freq=1, colsample_bytree=0.8, cat_smooth=20,
             verbose=-1, random_state=self.random_state)
-        self.model_.fit(X_fit, y_fit, eval_set=[(X_val, y_val)],
+        previous = self.init_model.model_.booster_ if self.init_model is not None else None
+        self.model_.fit(X_fit, y_fit, eval_set=[(X_val, y_val)], init_model=previous,
                         callbacks=[lgb.early_stopping(50, verbose=False)])
-        self.n_trees_ = self.model_.best_iteration_
+        # with init_model, best_iteration_ counts the new trees; the booster holds all of them
+        self.n_trees_ = self.model_.booster_.num_trees()
         return self
 
     def predict(self, X):

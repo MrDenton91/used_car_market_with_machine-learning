@@ -13,9 +13,9 @@ Current `Code/train.py` (LightGBM, raw-dollar target) on 14.14 million used vehi
 | Model | RMSE | MAE | R² |
 |---|---|---|---|
 | Median-price baseline | $11,561 | $7,959 | – |
-| LightGBM | **$3,785** | **$2,377** | **0.888** |
+| LightGBM | **$3,760** | **$2,363** | **0.889** |
 
-What reduced the error, in order of effect: more rows, the sale year and month as features, LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, and fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that). Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
+On the Craigslist listings, which have VINs, the RMSE is $4,908. What reduced the error, in order of effect: more rows, the sale year and month as features, VIN-decoded trim and engine specs (for rows with a VIN), LightGBM's native categorical handling instead of target encoding, the trim/transmission/engine/drivetrain/fuel/title columns, and fitting dollars rather than log-dollars (lower RMSE, slightly higher MAE; `--target log` flips that). Splitting into separate models by vehicle age gained only ~2% and isn't done by default. `train.py` prints the error per source.
 
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 

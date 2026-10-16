@@ -31,6 +31,35 @@ Percentage errors on the held-out test set (2.83M cars), from the current model:
 
 Reliable as a valuation / screening tool for mainstream cars ($10k–60k, under about 8 years old, mileage known); not precise enough to set a final price without inspection, and not to be used for cheap, very old or collector cars, where condition, which no source records, dominates the price.
 
+### Price range
+Two more LightGBM models, fitted with the pinball loss to the 10th and 90th percentiles of the price
+(`train.py --quantile 0.1` / `0.9`), turn the single estimate into the range 80% of such cars sell in.
+`predict.py` prints it whenever `models/price_low.joblib` and `models/price_high.joblib` exist, and
+`Code/evaluate_range.py` checks it on the test set. Results on the same 2.83M held-out cars:
+
+| Segment | Cars | Inside the range | Below | Above | Median width | Width / estimate |
+|---|---|---|---|---|---|---|
+| All | 2.83M | 78.8% | 10.6% | 10.6% | $6,075 | 31% |
+| $10,000–20,000 | 1.24M | 80.4% | 12.8% | 6.8% | $4,982 | 32% |
+| $20,000–35,000 | 1.11M | 79.8% | 7.7% | 12.5% | $7,295 | 29% |
+| $35,000–60,000 | 290k | 75.1% | 3.5% | 21.4% | $11,906 | 31% |
+| Over $60,000 | 26k | 63.0% | 1.6% | 35.4% | $21,841 | 35% |
+| Under $10,000 | 169k | 56–71% | 26–38% | 3–6% | $2,720–4,210 | 45–59% |
+| 0–8 years old | 2.54M | 79% | 10.5% | 10.5% | $6,000–6,400 | 28–32% |
+| Over 15 years old | 19k | 69.5% | 15.9% | 14.6% | $4,545 | 64% |
+| Craigslist listings | 72k | 67.8% | 16.0% | 16.2% | $3,970 | 29% |
+| Lender sale values (CarMax, Toyota, Santander, Carvana) | 1.5M | 78.6–79.4% | ≈10% | ≈10% | $5,500–7,400 | 27–35% |
+
+The range is honest where the point estimate is reliable: for cars of $10k–35k under 8 years old, 80% of
+sale prices land inside a band about 30% wide (±15% around the estimate). The width is itself a useful
+signal, since it grows to 45–60% on cheap cars and over 100% on classics, where the point estimate should
+not be trusted. The misses are one-sided at the extremes (prices below $10k mostly fall under the range,
+prices above $60k mostly over it), the same bias the point model shows, so a price outside $10k–60k is
+better reported with the range widened than as the 80% band.
+
+The quantile models stop improving later than the point model (5,000 and 4,500 trees against 2,104), so
+each takes about two hours to train on four cores.
+
 ## Data
 Cars was scraped using 20 scraper programs running in parallel and stored locally on a M.2 Form Factor. 
 Each datapoint represents a unique car being sold in the U.S. Cars.com refreshes the cars being shown on their website every couple of days. As such new data could be collected and added to total data set.
@@ -83,6 +112,11 @@ python Code/train.py carlist*.csv --scrape-year 2020
 # price a car with the saved pipeline
 python Code/predict.py --make Toyota --model Camry --year 2016 --mileage 45000 \
     --body-style Sedan --city Denver --state CO --color Silver
+
+# optional: the 10th- and 90th-percentile models, so predict.py also prints the 80% price range
+python Code/train.py carlist*.csv --quantile 0.1 --out models/price_low.joblib
+python Code/train.py carlist*.csv --quantile 0.9 --out models/price_high.joblib
+python Code/evaluate_range.py carlist*.csv     # coverage and width of the range on the test split
 ```
 
 `train.py` compares a median baseline, ridge regression and gradient boosting, reports RMSE, MAE and R² on a
